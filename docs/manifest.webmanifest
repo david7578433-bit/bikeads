@@ -1,0 +1,28 @@
+{
+ "name": "BikeAds + Deliver",
+ "short_name": "BikeAds",
+ "start_url": "./#/login",
+ "scope": "./",
+ "display": "standalone",
+ "background_color": "#f5f6f8",
+ "theme_color": "#111827",
+ "description": "Bike ads and local deliveries: driver, store, boss and admin.",
+ "icons": [
+  {
+   "src": "icons/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icons/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "icons/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}

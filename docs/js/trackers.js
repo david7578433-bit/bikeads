@@ -20,7 +20,7 @@
       const tick = () => {
         const updates = [];
         Data.list('bikes').forEach((b) => {
-          if (!b.position || b.position.source === 'manual') return;
+          if (!b.position || b.position.source === 'manual' || b.position.source === 'phone' || b.position.source === 'route') return; // placed by hand, or ridden by a delivery driver
           const loc = Data.get('locations', b.locationId);
           if (!loc) return;
           let h = headings[b.id];
@@ -80,7 +80,7 @@
       updates.forEach((u) => {
         const b = byTracker[u.trackerId];
         if (!b) return;
-        if (b.position && b.position.source === 'manual' && u.source === 'sim') return;
+        if (b.position && ['manual', 'phone', 'route'].includes(b.position.source) && u.source === 'sim') return;
         Data.put('bikes', { id: b.id, position: { lat: u.lat, lng: u.lng, at: u.at, source: u.source } }, { silent: true });
       });
       Data.flush('bikes');

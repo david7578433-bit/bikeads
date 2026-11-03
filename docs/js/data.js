@@ -9,7 +9,8 @@
   'use strict';
 
   const STORAGE_KEY = 'bikeads.v1';
-  const COLLECTIONS = ['users', 'locations', 'bikes', 'bookings', 'transactions', 'reconciliations'];
+  const COLLECTIONS = ['users', 'locations', 'bikes', 'bookings', 'transactions', 'reconciliations',
+    /* BikeAds Deliver plugin */ 'stores', 'drivers', 'orders', 'smslog', 'shifts', 'invoices', 'payouts'];
 
   const LocalAdapter = {
     async loadAll() {
@@ -111,10 +112,21 @@
       tx(addDays(t, -2), 'Bike repair - flat tires', -45, 'Maintenance', '', false),
       tx(addDays(t, -1), 'Deposit 20% - Fresh Basket Grocery', 125, 'Booking deposit', 'bk_1004', false)
     ];
-    return {
+    const base = {
       users, locations, bikes, bookings, transactions, reconciliations: [],
       settings: { businessName: 'BikeAds', pricePerBikeDay: price, depositPct: 20, openingBalance: 0, seededAt: new Date().toISOString(), version: 1 }
     };
+    addDeliver(base);
+    return base;
+  }
+
+  /* BikeAds Deliver: add its demo data (stores, drivers, orders...) next to the bike-ad data.
+   * Also runs once for a browser that already has v1 data, so nothing there is lost. */
+  function addDeliver(st) {
+    const DS = (typeof window !== 'undefined' && window.DeliverSeed) || null;
+    if (!DS || (st.settings && st.settings.deliver)) return false;
+    DS.addTo(st, { uid, iso, addDays, today });
+    return true;
   }
 
   let state = null;
@@ -122,7 +134,7 @@
   const listeners = new Set();
 
   async function persist(name) {
-    try { await adapter.saveCollection(name, state); } catch (e) { console.error('save failed', e); }
+    try { await adapter.saveCollection(name, state); } catch (e) { console.error('save failed', e); if (typeof window !== 'undefined' && window.UI && window.UI.toast) window.UI.toast('Could not save: this device\'s storage is full.'); }
     listeners.forEach((fn) => { try { fn(name); } catch (e) { console.error(e); } });
   }
 
@@ -133,6 +145,8 @@
       state = await adapter.loadAll();
       if (!state || !state.settings || state.settings.version !== 1) { state = seed(); await persist('all'); }
       COLLECTIONS.forEach((c) => { if (!Array.isArray(state[c])) state[c] = []; });
+      if (addDeliver(state)) await persist('all');
+      else if (typeof window !== 'undefined' && window.DeliverSeed && window.DeliverSeed.rollDay(state, { uid, iso, addDays, today })) await persist('all');
       return Data;
     },
     async reset() { await adapter.clearAll(); state = seed(); await persist('all'); },

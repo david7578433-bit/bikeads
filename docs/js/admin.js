@@ -264,7 +264,7 @@
   }
 
   /* ================= BOOKKEEPING ================= */
-  const CATS = ['Booking deposit', 'Booking payment', 'Owner investment', 'Equipment', 'Printing', 'Maintenance', 'Subscriptions', 'Insurance', 'Marketing', 'Bank fees', 'Other'];
+  const CATS = ['Booking deposit', 'Booking payment', 'Delivery income', 'Driver pay', 'Owner investment', 'Equipment', 'Printing', 'Maintenance', 'Subscriptions', 'Insurance', 'Marketing', 'Bank fees', 'Other'];
 
   function balances() {
     const s = Data.settings();

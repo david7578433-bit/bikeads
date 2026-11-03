@@ -1,4 +1,4 @@
-# BikeAds — bike advertising fleet (v1 demo)
+# BikeAds — bike advertising fleet + BikeAds Deliver (v2 demo)
 
 A simple two-sided web app for a bike-advertising business: every bike carries an ad and a GPS tracker; advertisers ("clients") book bikes.
 
@@ -7,9 +7,27 @@ Live demo: https://bikeads.sites.tab.bot/ and https://david7578433-bit.github.io
 In this repo the site lives in `docs/` (GitHub Pages serves that folder).
 
 ## Demo logins
-- Admin: `admin@bikeads.demo` / `admin123`
+- Admin: `admin@bikeads.demo` / `admin123` (runs both the bike ads and BikeAds Deliver)
 - Client: `client@bikeads.demo` / `client123`
-- Anyone can create a new client account from the login page.
+- Driver: `driver@bikeads.demo` / `driver123` (Yoel, Monroe/KJ) · also `driver2@bikeads.demo` (Shimon, Monroe/KJ) and `driver3@bikeads.demo` (Avrum, Williamsburg), same password
+- Store: `store@bikeads.demo` / `store123` (Bakertown Fresh Market, Monroe/KJ) · also `store2@bikeads.demo` (Lee Ave Grocery, Williamsburg), same password
+- Boss / dispatch: `boss@bikeads.demo` / `boss123`
+- Anyone can create a new client account from the login page. Admin → Deliver → Users & roles adds stores, drivers and bosses.
+
+## BikeAds Deliver (v2): delivery plugins
+Local stores hand deliveries to BikeAds riders. Four plugins share one data layer:
+- **Driver** (phone first, installable, works with no signal): today's route as an ordered list + map; Start shift turns the phone into the GPS (it moves the driver's bike on the same live map as the trackers); "Scan bags" with the phone camera (QR on the bag label; the phone's own barcode reader where it has one, jsQR otherwise; typed code as fallback) — a bag that belongs to another driver's route beeps red; Start route texts every customer their arrival time; Navigate opens the phone's maps app; Call / Text the customer; I'm here → Delivered with photo + finger signature + cash/card collected, or Couldn't deliver with a reason; My day shows delivered, failed, cash to hand in and pay.
+- **Store**: add orders one by one or many at once (CSV/Excel file or paste from Excel; columns are auto-detected); addresses are pinned on the map; print bag labels with QR codes (one per bag); each order's live status, driver and ETA; proof (photo, signature, amount collected); history by day/week/month with CSV export; billing (price, unbilled charges, invoices, cash collected for the store).
+- **Boss / dispatch**: live dispatch map of all drivers (and the ad bikes, optional); one click builds routes for the day — stops are split across the working drivers per area (sweep), each route is ordered by nearest neighbour + 2-opt, and the order that keeps the most customers inside their delivery window wins; drag a stop to another driver (computer) or "Move to…" (phone), ▲▼ to re-order, re-plan from the driver's position; late and failed list; end of day per driver and per store (delivered, failed, late, cash, card, charges, driver pay) with CSV; "Try again tomorrow" for failed stops; Money: price per store, invoices to stores (Mark paid → Books "Delivery income"), driver pay (→ Books "Driver pay").
+- **Admin** (Admin → Deliver tab): overview + live map, every order with its proof, stores, drivers (linked to a bike), users and roles, prices and routing settings, plugins on/off, customer text templates + the "would send" log, and the "Connect later" list. "Open a plugin" shows exactly what a boss/store/driver sees, with a bar back to Admin.
+
+### What is simulated in the Deliver demo
+- **Customer texts**: written from the templates and kept in a log as "would send"; nothing is sent until a texting number is connected.
+- **Data**: like v1, everything lives in this browser (localStorage), so each phone has its own copy — a driver's phone and the boss's computer do not see each other's changes until the shared database is connected (`js/data.js` adapter). Photos are shrunk to about 40 KB; past 3.5 MB the oldest door photos (over a week) are dropped, signatures stay.
+- **Driver positions**: real phone GPS while a shift is on (browser geolocation); without it the demo moves the driver along the route.
+- **Addresses**: pinned with OpenStreetMap's free search (Nominatim, one request per second); an address it cannot find gets an approximate pin that dispatch can drag ("Fix pin"). Routes use straight-line distance × a street detour factor (no paid map key).
+- **Payments at the door**: the driver records cash/card collected; no card is charged.
+- Every new day the demo replaces yesterday's untouched sample orders with 25 fresh ones (Monroe/KJ + Williamsburg), with windows starting about an hour ahead.
 
 ## What it does
 **Admin**
@@ -35,6 +53,9 @@ In this repo the site lives in `docs/` (GitHub Pages serves that folder).
 - `site/js/trackers.js` — tracker feed (simulator now, real provider later)
 - `site/js/ui.js` — map with flags, calendar, dialogs
 - `site/js/admin.js`, `site/js/client.js`, `site/js/app.js` — the two sides and the app shell
+- `site/js/deliver-core.js` (routing, ETAs, Excel/CSV parsing, text templates), `deliver-seed.js` (demo data), `deliver.js` (delivery logic), `deliver-ui.js` (route map, labels, proof, scanner, signature pad), `driver.js`, `store.js`, `boss.js`, `platform.js` (Admin → Deliver) and `site/deliver.css`
+- `site/sw.js` + `site/manifest.webmanifest` + `site/icons/` — installable app that opens with no signal
+- `site/vendor/qrcode` (qrcode-generator, MIT), `site/vendor/jsqr` (jsQR, Apache-2.0, loaded only when scanning), `site/vendor/xlsx` (SheetJS CE mini, Apache-2.0, loaded only for Excel files)
 - `site/vendor/leaflet/` — Leaflet 1.9.4 (BSD-2), served locally
 - `test/` — `node --test`
 

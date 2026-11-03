@@ -21,7 +21,7 @@ test('index.html has title, viewport and only local assets that exist', () => {
 });
 
 test('no placeholders, no social links, no analytics', () => {
-  for (const f of ['index.html', 'styles.css', 'js/app.js', 'js/admin.js', 'js/client.js', 'js/ui.js', 'js/data.js', 'js/trackers.js']) {
+  for (const f of ['index.html', 'styles.css', 'deliver.css', 'sw.js', 'js/app.js', 'js/admin.js', 'js/client.js', 'js/ui.js', 'js/data.js', 'js/trackers.js', 'js/deliver-core.js', 'js/deliver-seed.js', 'js/deliver.js', 'js/deliver-ui.js', 'js/driver.js', 'js/store.js', 'js/boss.js', 'js/platform.js']) {
     const s = read(f);
     assert.ok(!/lorem ipsum|TODO|FIXME|\{\{/i.test(s), 'placeholder in ' + f);
     assert.ok(!/wa\.me|whatsapp|facebook\.com|instagram\.com|google-analytics|gtag\(/i.test(s), 'social/analytics in ' + f);

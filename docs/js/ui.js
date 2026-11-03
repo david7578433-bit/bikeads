@@ -110,7 +110,7 @@
       return '<div class="pop"><strong>Bike #' + esc(b.number) + '</strong><div class="muted small">' + esc(loc ? loc.name : '') + ' · tracker ' + esc(b.trackerId) + '</div>' +
         '<div class="pop-row"><span class="sw red"></span><span class="grow">' + esc(b.advertiser || '—') + '</span><button class="mini" data-pop-toggle="red" data-bike="' + b.id + '">' + (f.red ? 'Down ▼' : 'Up ▲') + '</button></div>' +
         '<div class="pop-row"><span class="sw blue"></span><span class="grow">' + esc(b.marketing || '—') + '</span><button class="mini" data-pop-toggle="blue" data-bike="' + b.id + '">' + (f.blue ? 'Down ▼' : 'Up ▲') + '</button></div>' +
-        '<div class="muted small">' + (b.position.source === 'manual' ? 'Placed by hand' : b.position.source === 'live' ? 'Live GPS' : 'Simulated position') + ' · ' + ago(b.position.at) + '</div>' +
+        '<div class="muted small">' + (b.position.source === 'manual' ? 'Placed by hand' : b.position.source === 'live' ? 'Live GPS' : b.position.source === 'phone' ? 'Delivery driver · phone GPS' : b.position.source === 'route' ? 'Delivery driver · on route (demo)' : 'Simulated position') + ' · ' + ago(b.position.at) + '</div>' +
         (opts.admin ? '<div class="pop-actions"><button class="mini" data-pop-edit="' + b.id + '">Edit flags / bike</button>' + (b.position.source === 'manual' ? '<button class="mini" data-pop-release="' + b.id + '">Back to tracker</button>' : '') + '</div>' : '') +
         '</div>';
     }
