@@ -60,6 +60,7 @@
     },
     render() {
       ['AdminViews', 'ClientViews', 'DriverViews', 'StoreViews', 'BossViews'].forEach((k) => { if (window[k]) window[k].teardown(); });
+      if (heroRide) { heroRide.destroy(); heroRide = null; }
       const parts = (location.hash.replace(/^#\/?/, '') || '').split('/').filter(Boolean);
       const app = $('#app');
       document.title = (Data.settings().businessName || 'BikeAds') + ' · Bike advertising';
@@ -134,8 +135,34 @@
     navigator.serviceWorker.register('sw.js').catch(() => { /* the app still works without it */ });
   }
 
+  /* Main page hero (v3.1): a looping picture of ad bikes riding around Williamsburg, sample ads only. */
+  let heroRide = null;
+  const HERO_ADS = ['Your Ad Here', 'BikeAds', 'Fresh Basket', 'Your Ad Here', 'Corner Bakery', 'Sunny Deli', 'Main St Hardware', 'BikeAds', 'Your Shop', 'Green Grocer'];
+  function heroBlock() {
+    return '<section class="home-hero" aria-labelledby="hero-h">' +
+      '<div class="hero-ride" id="hero-ride"></div><div class="hero-shade" aria-hidden="true"></div>' +
+      '<div class="hero-copy"><span class="hero-kicker">Bike advertising · Williamsburg</span>' +
+      '<h1 id="hero-h">Your ad, riding every street in Williamsburg</h1>' +
+      '<p>Lee Ave, Bedford, Division, Marcy — your sign on bikes that ride all day. Pick how many bikes, see the price, book online.</p>' +
+      '<div class="hero-cta"><button class="btn primary big" id="hero-book" type="button">Book bikes</button><a class="hero-link" href="#/signup">New advertiser? Create an account</a></div></div>' +
+      '<span class="hero-credit">Sample ads · Streets © OpenStreetMap contributors</span></section>';
+  }
+  function mountHero() {
+    const host = document.getElementById('hero-ride'); if (!host || !window.BikeRide) return;
+    const phone = window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+    heroRide = BikeRide.mount(host, { count: phone ? 7 : 16, labels: HERO_ADS, seed: 23, speed: phone ? 1.3 : 1.5, maxDpr: phone ? 1.5 : 2, bikeScale: phone ? 1.05 : 1.25 });
+    const btn = document.getElementById('hero-book');
+    if (btn) btn.addEventListener('click', () => {
+      const f = document.getElementById('loginform'); const card = document.querySelector('.auth-card');
+      if (card) card.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+      const hint = document.getElementById('book-hint'); if (hint) hint.hidden = false;
+      if (f) setTimeout(() => f.email.focus({ preventScroll: true }), 350);
+    });
+  }
+
   function renderLogin(app) {
-    app.innerHTML = '<main class="auth"><div class="auth-card">' + brandBlock() +
+    app.innerHTML = '<main class="auth home">' + heroBlock() + '<div class="auth-card" id="login">' + brandBlock() +
+      '<p class="book-hint" id="book-hint" hidden>Log in as a client to book bikes (demo: client@bikeads.demo · client123), or <a href="#/signup">create a client account</a>.</p>' +
       '<form id="loginform" class="form" novalidate><label>Email<input class="input" type="email" name="email" autocomplete="username" required></label>' +
       '<label>Password<input class="input" type="password" name="password" autocomplete="current-password" required></label>' +
       '<p class="err" id="err" role="alert"></p><button class="btn primary wide big">Log in</button></form>' +
@@ -143,6 +170,7 @@
       '<button class="demo-btn" data-demo="client@bikeads.demo|client123"><strong>Client</strong><span>client@bikeads.demo · client123</span></button>' +
       '<p class="demo-group">BikeAds Deliver</p>' + demoDeliver() + '</div>' +
       '<p class="center">New advertiser? <a href="#/signup">Create a client account</a></p></div></main>';
+    mountHero();
     const f = $('#loginform');
     const tryLogin = (email, pw) => {
       const u = Data.list('users').find((x) => x.email.toLowerCase() === email.trim().toLowerCase() && x.password === pw);

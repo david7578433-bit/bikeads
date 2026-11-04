@@ -158,3 +158,34 @@ a { color: var(--brand-ink); }
 .ride-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .ride-foot { display: flex; justify-content: space-between; gap: .5rem; padding: .45rem .9rem .6rem; font-size: .72rem; color: var(--muted); flex-wrap: wrap; }
 .ride-count { font-weight: 700; color: var(--brand-ink); background: var(--brand-bg); border-radius: 999px; padding: .15rem .6rem; font-size: .8rem; }
+
+/* v3.1 main page hero: ad bikes riding Williamsburg (canvas, sample ads) */
+.auth.home { display: block; place-items: normal; justify-items: normal; min-height: 100vh; padding: 0 0 2rem; }
+.home-hero { width: 100%; }
+.auth.home .auth-card { margin: 1.4rem auto 0; scroll-margin-top: 1rem; }
+.home-hero { position: relative; height: min(68vh, 600px); min-height: 440px; overflow: hidden; background: #e9edf5; border-bottom: 1px solid var(--line); }
+.hero-ride { position: absolute; inset: 0; }
+.hero-ride canvas { display: block; width: 100%; height: 100%; }
+.hero-shade { position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, rgba(246,247,251,.96) 0%, rgba(246,247,251,.86) 30%, rgba(246,247,251,0) 62%); }
+.hero-copy { position: absolute; left: clamp(1.2rem, 5vw, 4rem); top: 50%; transform: translateY(-50%); max-width: 470px; }
+.hero-kicker { display: inline-block; background: var(--brand-bg); color: var(--brand-ink); border: 1px solid var(--brand-line); font-weight: 700; font-size: .78rem; letter-spacing: .02em; padding: .3rem .7rem; border-radius: 999px; }
+.home-hero h1 { font-size: clamp(2rem, 4.2vw, 3.2rem); line-height: 1.06; letter-spacing: -.035em; margin: .7rem 0 .6rem; color: var(--ink); }
+.home-hero p { color: var(--ink2); font-size: 1.05rem; line-height: 1.5; margin: 0 0 1.2rem; }
+.hero-cta { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem 1.1rem; }
+.hero-cta .btn.big { padding: .85rem 1.6rem; font-size: 1.05rem; }
+.hero-link { font-weight: 650; font-size: .92rem; }
+.hero-credit { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: var(--muted); background: rgba(255,255,255,.75); padding: 2px 7px; border-radius: 6px; }
+.book-hint { background: var(--brand-soft); border: 1px solid var(--brand-line); color: var(--brand-ink); border-radius: 12px; padding: .65rem .8rem; font-size: .9rem; margin: 0 0 .9rem; }
+@media (max-width: 640px) {
+  .home-hero { height: auto; min-height: 0; display: flex; flex-direction: column; }
+  .hero-ride { position: relative; inset: auto; height: 300px; order: 1; }
+  .hero-shade { display: none; }
+  .hero-copy { position: relative; left: auto; top: auto; transform: none; max-width: none; padding: 1.3rem 1.2rem 1.4rem; order: 0; background: linear-gradient(180deg, #eef2ff 0%, var(--bg) 100%); }
+  .home-hero h1 { font-size: 2rem; }
+  .home-hero p { font-size: .98rem; margin-bottom: 1rem; }
+  .hero-cta .btn.big { flex: 1 1 100%; }
+  .hero-link { flex: 1 1 100%; text-align: center; }
+  .hero-credit { bottom: 6px; }
+  .auth.home .auth-card { margin: 1rem 1rem 0; width: auto; }
+}

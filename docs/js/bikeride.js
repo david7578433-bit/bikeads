@@ -38,11 +38,11 @@
     function makeBike(i) {
       const name = MAIN[i % MAIN.length];
       const r = routes[name] || routes['Lee Avenue'];
-      return { r, d: rnd() * r.L, v: (16 + rnd() * 14) * (rnd() < .5 ? -1 : 1), a: 0, want: 1, c: PANEL[i % PANEL.length], bob: rnd() * 6.28 };
+      return { r, d: rnd() * r.L, v: (16 + rnd() * 14) * (rnd() < .5 ? -1 : 1), a: 0, want: 1, c: PANEL[i % PANEL.length], bob: rnd() * 6.28, lab: opts.labels && opts.labels.length ? opts.labels[i % opts.labels.length] : null };
     }
     function size() {
       const b = host.getBoundingClientRect();
-      dpr = Math.min(2, window.devicePixelRatio || 1);
+      dpr = Math.min(opts.maxDpr || 2, window.devicePixelRatio || 1);
       W = Math.max(10, b.width); Hh = Math.max(10, b.height);
       cv.width = Math.round(W * dpr); cv.height = Math.round(Hh * dpr);
       k = Math.max(W / D.w, Hh / D.h);
@@ -103,10 +103,11 @@
       ctx.stroke();
       ctx.restore();
       // business name tag (kept upright, not mirrored)
-      if (label && s >= .75) {
+      const lab = b.lab || label;
+      if (lab && s >= .75) {
         ctx.save(); ctx.globalAlpha = Math.max(0, Math.min(1, b.a));
         ctx.font = '700 ' + Math.round(8.5 * s) + 'px "Plus Jakarta Sans", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const txt = label.length > 14 ? label.slice(0, 13) + '…' : label;
+        const txt = lab.length > 14 ? lab.slice(0, 13) + '…' : lab;
         const tw = ctx.measureText(txt).width + 8;
         ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.strokeStyle = b.c; ctx.lineWidth = 1;
         roundRect(x - tw / 2, y - 31 * s - 6, tw, 12 * s, 4); ctx.fill(); ctx.stroke();

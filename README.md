@@ -15,6 +15,9 @@ In this repo the site lives in `docs/` (GitHub Pages serves that folder).
 - The map is admin-only now; clients no longer have a Map tab.
 - A looping animation of ad bikes riding around Williamsburg sits on the client booking steps (more bikes appear as the count goes up). Street outline from OpenStreetMap (© OpenStreetMap contributors).
 
+## v3.1 (Nov 4, 2026) — main page video
+- The main page (before login) opens with a looping animation of ad bikes riding around Williamsburg with sample ads ("Your Ad Here", "BikeAds", sample shop names), the headline "Your ad, riding every street in Williamsburg" and a "Book bikes" button that takes you to the client log-in. Light on phones (fewer bikes, lower resolution, pauses when off screen); a still picture when the phone asks for reduced motion. Everything else on the page is unchanged.
+
 ## Demo logins
 - Admin: `admin@bikeads.demo` / `admin123` (runs both the bike ads and BikeAds Deliver)
 - Client: `client@bikeads.demo` / `client123`
