@@ -310,3 +310,18 @@ details.demo-box[open] > summary { margin-bottom: .4rem; }
 .pm-switches { display: flex; flex-wrap: wrap; gap: .4rem 1.4rem; }
 @media (min-width: 760px) { .pm-grid { grid-template-columns: repeat(4, 1fr); } }
 .paycard .pc-num { white-space: nowrap; font-size: clamp(1rem, 5.2vw, 1.35rem); letter-spacing: .04em; }
+
+/* ---------- v4.1 (David, Nov 4 3:53 PM): no boxed middle panel — full-width colorful page ---------- */
+body { background: #fff; }
+.lpanel, .lpanel.lpanel { max-width: none; width: 100%; margin: 0; border-radius: 0;
+  background: linear-gradient(180deg, var(--sky) 0, var(--sky-soft) 900px, #fff 1700px, #fff 100%); }
+@media (min-width: 760px) { .lpanel.lpanel { padding: 1rem clamp(1rem, 4vw, 3.5rem) 4rem; } }
+@media (max-width: 640px) { .lpanel, .lpanel.lpanel { border-radius: 0; } }
+.lnav { max-width: none; padding-left: clamp(1rem, 4vw, 3.5rem); padding-right: clamp(1rem, 4vw, 3.5rem); }
+.mow .sec:nth-of-type(even) { position: relative; }
+.mow .sec:nth-of-type(even)::before { content: ""; position: absolute; z-index: -1; top: -2.5rem; bottom: -2.5rem; left: 50%; width: 100vw; transform: translateX(-50%); background: var(--sky-soft); }
+.lpanel { position: relative; z-index: 0; overflow-x: clip; }
+main#main { margin: 0; width: 100%; max-width: none; border-radius: 0; }
+@media (min-width: 760px) { main#main { margin: 0; width: 100%; max-width: none; border-radius: 0; padding-left: clamp(1.2rem, 4vw, 3.5rem); padding-right: clamp(1.2rem, 4vw, 3.5rem); } }
+.auth:not(.home) { border: 0; border-radius: 0; }
+html, body { margin: 0; }
