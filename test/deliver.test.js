@@ -22,7 +22,8 @@ test('the four plugins are wired into the page and the login', () => {
   for (const f of ['js/deliver-core.js', 'js/deliver-seed.js', 'js/deliver.js', 'js/deliver-ui.js', 'js/driver.js', 'js/store.js', 'js/boss.js', 'js/platform.js', 'vendor/qrcode/qrcode.js']) assert.ok(html.includes(f), f);
   assert.match(html, /manifest\.webmanifest/);
   const app = read('js/app.js');
-  for (const s of ['driver@bikeads.demo', 'store@bikeads.demo', 'boss@bikeads.demo', 'admin@bikeads.demo', 'client@bikeads.demo', 'BikeAds Deliver', 'viewAs', 'serviceWorker']) assert.ok(app.includes(s), s);
+  for (const s of ['driver@bikeads.demo', 'store@bikeads.demo', 'boss@bikeads.demo', 'admin@bikeads.demo', 'client@bikeads.demo', 'viewAs', 'serviceWorker']) assert.ok(app.includes(s), s);
+  assert.ok(read('js/platform.js').includes('BikeAds Deliver')); // v4: the delivery side keeps its own name, behind FEATURES.delivery
   assert.ok(fs.existsSync(path.join(site, 'sw.js')) && fs.existsSync(path.join(site, 'icons/icon-512.png')) && fs.existsSync(path.join(site, 'vendor/jsqr/jsQR.js')) && fs.existsSync(path.join(site, 'vendor/xlsx/xlsx.mini.min.js')));
   const man = JSON.parse(read('manifest.webmanifest'));
   assert.strictEqual(man.display, 'standalone');

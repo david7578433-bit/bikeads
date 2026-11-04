@@ -1,6 +1,6 @@
 {
- "name": "BikeAds + Deliver",
- "short_name": "BikeAds",
+ "name": "Media on Wheels",
+ "short_name": "Media on Wheels",
  "start_url": "./#/login",
  "scope": "./",
  "display": "standalone",

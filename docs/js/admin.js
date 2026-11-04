@@ -138,9 +138,9 @@
     const s = statusOf(b);
     return '<div class="bk-row"><div class="bk-main"><div class="bk-title"><strong>' + esc(b.company) + '</strong> ' + badge(b) + '</div>' +
       '<div class="small">' + fmtRange(b.start, b.end) + ' · ' + Data.days(b.start, b.end) + ' days · ' + b.bikeIds.length + ' bikes (' + b.bikeIds.map(Data.bikeLabel).join(', ') + ')' + (b.mode === 'count' ? ' · client asked for ' + b.bikeIds.length + ' bikes' : b.mode !== 'specific' ? ' · asked for any ' + b.mode.replace('any', '') : '') + '</div>' +
-      '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + (b.payment && b.payment.last4 ? ' · paid in full by ' + esc(b.payment.brand) + ' •••• ' + esc(b.payment.last4) + ' (demo)' : ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid (demo)' : ' not paid')) + '</div>' +
+      '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + (b.payment && b.payment.method === 'zelle' ? ' · Zelle, note ' + esc(b.payment.ref || '') + (b.depositPaid ? ' · <b>paid</b>' : ' · <b class="zelle-wait">awaiting Zelle confirmation</b>') : b.payment && b.payment.last4 ? ' · paid in full by ' + esc(b.payment.brand) + ' •••• ' + esc(b.payment.last4) + ' (demo)' : b.payment && b.payment.brand ? ' · paid in full with ' + esc(b.payment.brand) + ' (demo)' : ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid (demo)' : ' not paid')) + '</div>' +
       (b.setupTotal != null ? '<div class="small muted">Printing &amp; setup ' + money(b.setupTotal) + ' · weekly ' + money(b.weeklyTotal) + ' (' + b.weeks + ' wk)' + (b.areaName ? ' · area: ' + esc(b.areaName) : '') + (b.areaNote ? ' (' + esc(b.areaNote) + ')' : '') + (b.contactPhone ? ' · ' + esc(b.contactPhone) : '') + '</div>' : '') + '</div>' +
-      '<div class="bk-actions">' + (s === 'pending' ? '<button class="btn ok" data-approve="' + b.id + '">✓ Approve</button><button class="btn danger-ghost" data-decline="' + b.id + '">✕ Decline</button>' : '') +
+      '<div class="bk-actions">' + (b.payment && b.payment.method === 'zelle' && !b.depositPaid ? '<button class="btn ok" data-zelle-paid="' + b.id + '">Mark Zelle paid</button>' : '') + (s === 'pending' ? '<button class="btn ok" data-approve="' + b.id + '">✓ Approve</button><button class="btn danger-ghost" data-decline="' + b.id + '">✕ Decline</button>' : '') +
       '<button class="btn ghost" data-open="' + b.id + '">Edit</button></div></div>';
   }
 
@@ -183,10 +183,21 @@
   function onBookingClick(e) {
     const ap = e.target.closest('[data-approve]'); if (ap) { approve(ap.getAttribute('data-approve')); return; }
     const de = e.target.closest('[data-decline]'); if (de) { decline(de.getAttribute('data-decline')); return; }
+    const zp = e.target.closest('[data-zelle-paid]'); if (zp) { zellePaid(zp.getAttribute('data-zelle-paid')); return; }
     const op = e.target.closest('[data-open]'); if (op) { e.stopPropagation(); editBooking(op.getAttribute('data-open')); }
   }
 
   function addHistory(b, action) { return (b.history || []).concat([{ at: new Date().toISOString(), by: App.user().name, action }]); }
+
+  /* v4.1: a Zelle booking waits until the admin sees the money and marks it paid. */
+  function zellePaid(id) {
+    const b = Data.get('bookings', id); if (!b) return;
+    confirmBox('Zelle received?', 'Mark ' + money(b.total) + ' from ' + esc(b.company) + ' (note ' + esc((b.payment && b.payment.ref) || '') + ') as paid?', 'Mark paid', () => {
+      Data.put('bookings', { id, depositPaid: true, payment: Object.assign({}, b.payment, { status: 'paid', paidAt: new Date().toISOString() }), history: addHistory(b, 'Zelle payment received, marked paid') });
+      if (b.status === 'approved' && !Data.list('transactions').some((t) => t.bookingId === id && t.category === 'Booking payment')) Data.put('transactions', { date: Data.today(), description: 'Zelle ' + ((b.payment && b.payment.ref) || '') + ' - ' + b.company, amount: b.total, category: 'Booking payment', bookingId: id, reconciled: false, createdAt: new Date().toISOString() });
+      toast('Marked paid'); App.render();
+    });
+  }
 
   function approve(id) {
     const b = Data.get('bookings', id);
@@ -195,7 +206,7 @@
       Data.put('bookings', { id, status: 'approved', history: addHistory(b, 'Approved') });
       let note = 'Booking approved';
       if (b.depositPaid && !Data.list('transactions').some((t) => t.bookingId === id && t.category === 'Booking deposit')) {
-        Data.put('transactions', { date: Data.today(), description: (b.payment && b.payment.last4 ? 'Card payment (demo) ' + b.payment.brand + ' ' + b.payment.last4 + ' - ' : 'Deposit ' + Data.settings().depositPct + '% - ') + b.company, amount: b.deposit, category: 'Booking deposit', bookingId: id, reconciled: false, createdAt: new Date().toISOString() });
+        Data.put('transactions', { date: Data.today(), description: (b.payment && b.payment.last4 ? 'Card payment (demo) ' + b.payment.brand + ' ' + b.payment.last4 + ' - ' : b.payment && b.payment.brand ? b.payment.brand + ' payment ' + (b.payment.ref ? b.payment.ref + ' ' : '(demo) ') + '- ' : 'Deposit ' + Data.settings().depositPct + '% - ') + b.company, amount: b.deposit, category: 'Booking deposit', bookingId: id, reconciled: false, createdAt: new Date().toISOString() });
         note += ' · deposit added to the books';
       }
       toast(note); App.render();
@@ -265,7 +276,9 @@
   }
 
   /* ================= BOOKKEEPING ================= */
-  const CATS = ['Booking deposit', 'Booking payment', 'Delivery income', 'Driver pay', 'Owner investment', 'Equipment', 'Printing', 'Maintenance', 'Subscriptions', 'Insurance', 'Marketing', 'Bank fees', 'Other'];
+  const CATS = ['Booking deposit', 'Booking payment', 'Delivery income', 'Driver pay', 'Owner investment', 'Equipment', 'Printing', 'Maintenance', 'Subscriptions', 'Insurance', 'Marketing', 'Bank fees', 'Other']
+    /* delivery-only categories show only when the delivery module is on (js/config.js) */
+    .filter((c) => (window.FEATURES && FEATURES.delivery) || !['Delivery income', 'Driver pay'].includes(c));
 
   function balances() {
     const s = Data.settings();
@@ -379,12 +392,30 @@
     const lines = [['Date', 'Description', 'Category', 'Amount', 'Running balance', 'Reconciled', 'Booking'].map(q).join(',')]
       .concat(rows.map((t) => [t.date, t.description, t.category, t.amount.toFixed(2), t.run.toFixed(2), t.reconciled ? 'yes' : 'no', t.bookingId ? ((Data.get('bookings', t.bookingId) || {}).company || t.bookingId) : ''].map(q).join(',')));
     const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'bikeads-transactions-' + Data.today() + '.csv';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'media-on-wheels-transactions-' + Data.today() + '.csv';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     toast('CSV downloaded');
   }
 
   /* ================= SETTINGS ================= */
+  function payAdmin(host) {
+    const s = Data.settings(), on = s.payMethods || {};
+    const L = (window.ClientViews && ClientViews.PAY_METHODS) || [['card', 'Card'], ['gpay', 'Google Pay'], ['applepay', 'Apple Pay'], ['zelle', 'Zelle']];
+    host.innerHTML = '<h2>Payment methods</h2><p class="muted">What clients can choose on the payment step. All are demo for now: nothing is charged.</p>' +
+      '<form id="pm-form" class="form"><div class="pm-switches">' + L.map((m) => '<label class="check"><input type="checkbox" name="pm_' + m[0] + '"' + (on[m[0]] !== false ? ' checked' : '') + '> ' + m[1] + '</label>').join('') + '</div>' +
+      '<div class="two"><label>Zelle: name people send to<input class="input" name="zelleName" value="' + esc(s.zelleName || '') + '" placeholder="' + esc(s.businessName || 'Media on Wheels') + '"></label>' +
+      '<label>Zelle: email or phone<input class="input" name="zelleContact" value="' + esc(s.zelleContact || '') + '" placeholder="the email or phone on your Zelle"></label></div>' +
+      '<p class="small muted">Zelle bookings show “Awaiting Zelle confirmation” in Bookings until you tap “Mark Zelle paid”. Google Pay and Apple Pay need a payment account (for example Stripe) to take real money.</p>' +
+      '<div class="row-end"><button class="btn primary">Save payment methods</button></div></form>';
+    host.querySelector('#pm-form').addEventListener('submit', (e) => {
+      e.preventDefault(); const f = e.target, pm = {};
+      L.forEach((m) => { pm[m[0]] = f['pm_' + m[0]].checked; });
+      if (!Object.values(pm).some(Boolean)) { toast('Keep at least one way to pay'); return; }
+      Data.saveSettings({ payMethods: pm, zelleName: f.zelleName.value.trim(), zelleContact: f.zelleContact.value.trim() });
+      toast('Payment methods saved');
+    });
+  }
+
   function renderSettings(root) {
     const s = Data.settings();
     root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>Settings</h1></div>' +
@@ -399,12 +430,18 @@
       '<label>Weekly charge, per bike per week ($)<input class="input" type="number" step="0.01" min="0" name="weeklyPerBike" value="' + (s.weeklyPerBike != null ? s.weeklyPerBike : 150) + '"></label></div>' +
       '<label class="check"><input type="checkbox" name="pricesAreSamples"' + (s.pricesAreSamples ? ' checked' : '') + '> Still sample prices (shows a "sample prices" note to clients)</label>' +
       '<div class="row-end"><button class="btn primary">Save settings</button></div></form>' +
+      '<div class="card" id="paymethods-card"></div>' +
+      '<div class="card" id="homevideo-card"></div>' +
+      '<div class="card" id="homecontent-card"></div>' +
       '<div class="card"><h2>GPS trackers</h2><p>Status: <strong>' + (TrackerFeed.isLive() ? 'Live' : 'Simulator (demo positions)') + '</strong></p><p class="muted">When you tell us the tracker brand (or the app you use to see them), we connect its live feed here. Each bike is matched by its tracker ID.</p></div>' +
       '<div class="card"><h2>Demo data</h2><p class="muted">In this first version everything is saved in this browser only, so each phone or computer has its own copy. A shared database comes next.</p><button class="btn danger-ghost" id="reset">Reset demo data</button></div></section>';
+    payAdmin($('#paymethods-card', root)); // v4.1: card / Google Pay / Apple Pay / Zelle
+    if (window.HomeVideo) HomeVideo.renderAdmin($('#homevideo-card', root)); // v4: main page video upload
+    if (window.HomePage) HomePage.renderAdmin($('#homecontent-card', root)); // v4: main page stats, reviews, story, contact
     $('#setform', root).addEventListener('submit', (e) => {
       e.preventDefault(); const f = e.target;
       const priceChanged = +f.setupFeePerBike.value !== +s.setupFeePerBike || +f.weeklyPerBike.value !== +s.weeklyPerBike;
-      Data.saveSettings({ businessName: f.businessName.value.trim() || 'BikeAds', pricePerBikeDay: +f.pricePerBikeDay.value || 0, depositPct: Math.min(100, Math.max(0, +f.depositPct.value || 0)), openingBalance: +f.openingBalance.value || 0,
+      Data.saveSettings({ businessName: f.businessName.value.trim() || 'Media on Wheels', pricePerBikeDay: +f.pricePerBikeDay.value || 0, depositPct: Math.min(100, Math.max(0, +f.depositPct.value || 0)), openingBalance: +f.openingBalance.value || 0,
         setupFeePerBike: Math.max(0, +f.setupFeePerBike.value || 0), weeklyPerBike: Math.max(0, +f.weeklyPerBike.value || 0), pricesAreSamples: priceChanged && s.pricesAreSamples ? false : f.pricesAreSamples.checked });
       toast('Settings saved'); App.render();
     });

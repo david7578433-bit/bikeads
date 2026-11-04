@@ -55,9 +55,9 @@
     const advertisers = ['Fresh Basket Grocery', 'QuickMove Movers', 'Bright Smile Dental'];
     const marketers = ['Hudson Media Group', 'Brooklyn Ad Works', 'Hudson Media Group'];
     const users = [
-      { id: 'u_admin', role: 'admin', name: 'David Klar', company: 'BikeAds', email: 'admin@bikeads.demo', password: 'admin123' },
+      { id: 'u_admin', role: 'admin', name: 'David Klar', company: 'Media on Wheels', email: 'admin@bikeads.demo', password: 'admin123' },
       { id: 'u_c1', role: 'client', name: 'Moshe Weiss', company: advertisers[0], email: 'client@bikeads.demo', password: 'client123', phone: '' },
-      { id: 'u_c2', role: 'client', name: 'Sara Green', company: advertisers[1], email: 'sara@quickmove.demo', password: 'client123', phone: '' },
+      { id: 'u_c2', role: 'client', name: 'Shmuel Green', company: advertisers[1], email: 'sara@quickmove.demo', password: 'client123', phone: '' },
       { id: 'u_c3', role: 'client', name: 'Yossi Katz', company: advertisers[2], email: 'yossi@brightsmile.demo', password: 'client123', phone: '' }
     ];
     // 12 bikes: 4 Williamsburg, 4 Monroe/KJ, 2 Borough Park, 1 Lakewood, 1 Monsey
@@ -117,7 +117,7 @@
     ];
     const base = {
       users, locations, bikes, bookings, transactions, reconciliations: [],
-      settings: { businessName: 'BikeAds', pricePerBikeDay: price, depositPct: 20, openingBalance: 0, seededAt: new Date().toISOString(), version: 1, setupFeePerBike: SAMPLE_PRICES.setupFeePerBike, weeklyPerBike: SAMPLE_PRICES.weeklyPerBike, pricesAreSamples: true }
+      settings: { businessName: 'Media on Wheels', pricePerBikeDay: price, depositPct: 20, openingBalance: 0, seededAt: new Date().toISOString(), version: 1, setupFeePerBike: SAMPLE_PRICES.setupFeePerBike, weeklyPerBike: SAMPLE_PRICES.weeklyPerBike, pricesAreSamples: true }
     };
     addDeliver(base);
     return base;
@@ -153,6 +153,12 @@
         state.settings.weeklyPerBike = state.settings.weeklyPerBike == null ? SAMPLE_PRICES.weeklyPerBike : state.settings.weeklyPerBike;
         if (state.settings.pricesAreSamples == null) state.settings.pricesAreSamples = true;
         await persist('settings');
+      }
+      /* v4 (Nov 4 2026): the brand is "Media on Wheels" (repo/URL keep the old name). */
+      if (!state.settings.businessName || state.settings.businessName === 'BikeAds') {
+        state.settings.businessName = 'Media on Wheels';
+        const a = state.users.find((u) => u.id === 'u_admin'); if (a && a.company === 'BikeAds') a.company = 'Media on Wheels';
+        await persist('all');
       }
       if (addDeliver(state)) await persist('all');
       else if (typeof window !== 'undefined' && window.DeliverSeed && window.DeliverSeed.rollDay(state, { uid, iso, addDays, today })) await persist('all');

@@ -1,4 +1,4 @@
-/* BikeAds app shell: sign-in, routing, header and tabs. */
+/* Media on Wheels app shell (repo: bikeads): main page, sign-in, routing, header and tabs. */
 (function () {
   'use strict';
   const { esc, $, $$, toast, closeModal } = UI;
@@ -20,8 +20,11 @@
   };
   const ROLE_LABEL = { admin: 'Admin', client: 'Client', driver: 'Driver', store: 'Store', boss: 'Boss' };
   const DELIVER_ROLES = ['driver', 'store', 'boss'];
+  /* The delivery business (driver, store, boss + the admin Deliver tab) is saved in the code behind one switch:
+   * FEATURES.delivery in js/config.js (off for now). Off = no delivery pages, roles, logins or mentions. */
+  const DELIVERY = !!(window.FEATURES && window.FEATURES.delivery);
   const VIEWAS = 'bikeads.viewas';
-  const views = (role) => ({ admin: window.AdminViews, client: window.ClientViews, driver: window.DriverViews, store: window.StoreViews, boss: window.BossViews })[role];
+  const views = (role) => (!DELIVERY && DELIVER_ROLES.includes(role)) ? undefined : ({ admin: window.AdminViews, client: window.ClientViews, driver: window.DriverViews, store: window.StoreViews, boss: window.BossViews })[role];
   const home = (role) => '#/' + role + '/' + views(role).tabs[0].key;
   const icon = (k) => '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS[k] + '</svg>';
 
@@ -35,8 +38,8 @@
       current = sid ? Data.get('users', sid) : null;
       if (current && !views(current.role)) current = null;
       TrackerFeed.start();
-      if (window.Deliver) Deliver.Live.start();
-      if (current && current.role === 'driver') DriverViews.resume(current);
+      if (DELIVERY && window.Deliver) Deliver.Live.start();
+      if (DELIVERY && current && current.role === 'driver') DriverViews.resume(current);
       window.addEventListener('hashchange', () => { closeModal(); App.render(); });
       window.addEventListener('online', netBanner); window.addEventListener('offline', netBanner);
       App.render();
@@ -45,9 +48,9 @@
     login(user) { current = user; localStorage.setItem(SESSION, user.id); sessionStorage.removeItem(VIEWAS); location.hash = home(user.role); },
     logout() {
       const back = sessionStorage.getItem(VIEWAS);
-      if (back && Data.get('users', back)) { sessionStorage.removeItem(VIEWAS); current = Data.get('users', back); localStorage.setItem(SESSION, current.id); location.hash = '#/admin/deliver'; return; }
+      if (back && Data.get('users', back)) { sessionStorage.removeItem(VIEWAS); current = Data.get('users', back); localStorage.setItem(SESSION, current.id); location.hash = DELIVERY ? '#/admin/deliver' : '#/admin'; return; }
       if (window.DriverViews) DriverViews.stopGps();
-      current = null; localStorage.removeItem(SESSION); ClientViews.resetWiz(); location.hash = '#/login';
+      current = null; localStorage.removeItem(SESSION); ClientViews.resetWiz(); location.hash = '#/';
     },
     /* Admin: open a plugin exactly as that person sees it; "Back to Admin" returns. */
     viewAs(userId) {
@@ -60,19 +63,23 @@
     },
     render() {
       ['AdminViews', 'ClientViews', 'DriverViews', 'StoreViews', 'BossViews'].forEach((k) => { if (window[k]) window[k].teardown(); });
-      if (heroRide) { heroRide.destroy(); heroRide = null; }
+      if (window.HomePage) HomePage.teardown();
+      if (window.HomeVideo) HomeVideo.teardown();
       const parts = (location.hash.replace(/^#\/?/, '') || '').split('/').filter(Boolean);
       const app = $('#app');
-      document.title = (Data.settings().businessName || 'BikeAds') + ' · Bike advertising';
+      document.title = (Data.settings().businessName || 'Media on Wheels') + ' · Bike advertising';
+      if (current && !views(current.role)) current = null;
+      if (parts[0] === 'home') return HomePage.render(app, current); // the open main page, also for logged-in users
       if (!current) {
         if (parts[0] === 'signup') return renderSignup(app);
-        return renderLogin(app);
+        if (parts[0] === 'login') return renderLogin(app, parts[1] === 'book');
+        return HomePage.render(app, null);
       }
       current = Data.get('users', current.id) || current;
       const role = current.role;
       const V = views(role);
       if (!V) { App.logout(); return; }
-      if (DELIVER_ROLES.includes(role)) document.title = (window.Deliver ? Deliver.settings().name : 'BikeAds Deliver') + ' · ' + ROLE_LABEL[role];
+      if (DELIVER_ROLES.includes(role)) document.title = (window.Deliver ? Deliver.settings().name : 'Deliver') + ' · ' + ROLE_LABEL[role];
       if (window.Deliver && !Deliver.pluginOn(role)) {
         app.innerHTML = '<main class="auth"><div class="auth-card center">' + brandBlock() + '<h2>The ' + ROLE_LABEL[role] + ' plugin is turned off</h2><p class="muted">The admin turned it off for now. Nothing was deleted.</p><button class="btn primary wide big" id="logout">' + (sessionStorage.getItem(VIEWAS) ? 'Back to Admin' : 'Log out') + '</button></div></main>';
         $('#logout').addEventListener('click', () => App.logout());
@@ -102,7 +109,7 @@
     const sub = role === 'store' ? (window.Deliver && Deliver.storeOf(current) ? Deliver.storeOf(current).name : current.company) : role === 'client' ? current.company : '';
     return (viewing ? '<div class="viewas">Viewing as ' + esc(current.name) + ' (' + ROLE_LABEL[role] + ')<button class="mini" id="viewas-back">Back to Admin</button></div>' : '') +
       '<div class="netbar" id="netbar" role="status" hidden>No signal — everything you do is saved on this phone.</div>' +
-      '<header class="top' + (dl ? ' deliver' : '') + '"><a class="brand" href="#/' + role + '/' + tabs[0].key + '"><span class="logo" aria-hidden="true"><i class="lf r"></i><i class="lf b"></i></span>' + esc(s.businessName || 'BikeAds') + (dl ? '<span class="brand-sub">Deliver</span>' : '') + '</a>' +
+      '<header class="top' + (dl ? ' deliver' : '') + '"><a class="brand" href="#/' + role + '/' + tabs[0].key + '"><span class="logo" aria-hidden="true"><i class="lf r"></i><i class="lf b"></i></span>' + esc(s.businessName || 'Media on Wheels') + (dl ? '<span class="brand-sub">Deliver</span>' : '') + '</a>' +
       '<span class="role-pill ' + role + '">' + ROLE_LABEL[role] + '</span>' +
       '<nav class="tabs desk" aria-label="Main">' + nav + '</nav>' +
       '<div class="who"><span class="who-name">' + esc(current.name) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span><button class="btn ghost small-btn" id="logout">' + (viewing ? 'Back' : 'Log out') + '</button></div></header>' +
@@ -111,7 +118,7 @@
   }
 
   function brandBlock() {
-    return '<div class="auth-brand"><span class="logo big" aria-hidden="true"><i class="lf r"></i><i class="lf b"></i></span><h1>' + esc(Data.settings().businessName || 'BikeAds') + '</h1><p>Ads on bikes, live on the map — and deliveries for local stores.</p></div>';
+    return '<div class="auth-brand"><span class="logo big" aria-hidden="true"><i class="lf r"></i><i class="lf b"></i></span><h1>' + esc(Data.settings().businessName || 'Media on Wheels') + '</h1><p>Ads on grocery-delivery bikes in Williamsburg and Boro Park' + (DELIVERY ? ' — and deliveries for local stores.' : '.') + '</p></div>';
   }
 
   function demoDeliver() {
@@ -135,61 +142,44 @@
     navigator.serviceWorker.register('sw.js').catch(() => { /* the app still works without it */ });
   }
 
-  /* Main page hero (v3.1): a looping picture of ad bikes riding around Williamsburg, sample ads only. */
-  let heroRide = null;
-  const HERO_ADS = ['Your Ad Here', 'BikeAds', 'Fresh Basket', 'Your Ad Here', 'Corner Bakery', 'Sunny Deli', 'Main St Hardware', 'BikeAds', 'Your Shop', 'Green Grocer'];
-  function heroBlock() {
-    return '<section class="home-hero" aria-labelledby="hero-h">' +
-      '<div class="hero-ride" id="hero-ride"></div><div class="hero-shade" aria-hidden="true"></div>' +
-      '<div class="hero-copy"><span class="hero-kicker">Bike advertising · Williamsburg</span>' +
-      '<h1 id="hero-h">Your ad, riding every street in Williamsburg</h1>' +
-      '<p>Lee Ave, Bedford, Division, Marcy — your sign on bikes that ride all day. Pick how many bikes, see the price, book online.</p>' +
-      '<div class="hero-cta"><button class="btn primary big" id="hero-book" type="button">Book bikes</button><a class="hero-link" href="#/signup">New advertiser? Create an account</a></div></div>' +
-      '<span class="hero-credit">Sample ads · Streets © OpenStreetMap contributors</span></section>';
-  }
-  function mountHero() {
-    const host = document.getElementById('hero-ride'); if (!host || !window.BikeRide) return;
-    const phone = window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
-    heroRide = BikeRide.mount(host, { count: phone ? 7 : 16, labels: HERO_ADS, seed: 23, speed: phone ? 1.3 : 1.5, maxDpr: phone ? 1.5 : 2, bikeScale: phone ? 1.05 : 1.25 });
-    const btn = document.getElementById('hero-book');
-    if (btn) btn.addEventListener('click', () => {
-      const f = document.getElementById('loginform'); const card = document.querySelector('.auth-card');
-      if (card) card.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
-      const hint = document.getElementById('book-hint'); if (hint) hint.hidden = false;
-      if (f) setTimeout(() => f.email.focus({ preventScroll: true }), 350);
-    });
+  /* v4: the main page is an open one-pager (js/home.js). Log in is its own calm page; "Book bikes" lands here
+   * with a short note (#/login/book). The v3.1 Williamsburg ad-bike animation now sits in the Videos section. */
+  function loginNav() {
+    return '<header class="lnav"><a class="brand" href="#/"><span class="logo" aria-hidden="true"><i class="lf r"></i><i class="lf b"></i></span>' + esc(Data.settings().businessName || 'Media on Wheels') + '</a>' +
+      '<a class="btn pill white lnav-cta" href="#/">‹ Main page</a></header>';
   }
 
-  function renderLogin(app) {
-    app.innerHTML = '<main class="auth home">' + heroBlock() + '<div class="auth-card" id="login">' + brandBlock() +
-      '<p class="book-hint" id="book-hint" hidden>Log in as a client to book bikes (demo: client@bikeads.demo · client123), or <a href="#/signup">create a client account</a>.</p>' +
+  function renderLogin(app, booking) {
+    const deliverDemo = DELIVERY ? '<p class="demo-group">' + esc(window.Deliver ? Deliver.settings().name : 'Deliver') + '</p>' + demoDeliver() : '';
+    app.innerHTML = '<main class="auth home v4 login-page">' + loginNav() + '<div class="lpanel login-panel"><div class="auth-card" id="login">' + brandBlock() +
+      (booking ? '<p class="book-hint" id="book-hint">To book bikes, log in or <a href="#/signup">create a free account</a>. It takes a minute.</p>' : '') +
       '<form id="loginform" class="form" novalidate><label>Email<input class="input" type="email" name="email" autocomplete="username" required></label>' +
       '<label>Password<input class="input" type="password" name="password" autocomplete="current-password" required></label>' +
-      '<p class="err" id="err" role="alert"></p><button class="btn primary wide big">Log in</button></form>' +
-      '<div class="demo-box"><h2>Demo logins</h2><p class="demo-group">Bike ads</p><button class="demo-btn" data-demo="admin@bikeads.demo|admin123"><strong>Admin</strong><span>admin@bikeads.demo · admin123 · also runs BikeAds Deliver</span></button>' +
-      '<button class="demo-btn" data-demo="client@bikeads.demo|client123"><strong>Client</strong><span>client@bikeads.demo · client123</span></button>' +
-      '<p class="demo-group">BikeAds Deliver</p>' + demoDeliver() + '</div>' +
-      '<p class="center">New advertiser? <a href="#/signup">Create a client account</a></p></div></main>';
-    mountHero();
+      '<p class="err" id="err" role="alert"></p><button class="btn primary wide big pill">Log in</button></form>' +
+      '<p class="center">New advertiser? <a href="#/signup">Create a client account</a></p>' +
+      '<details class="demo-box"' + (booking ? ' open' : '') + '><summary>Demo logins</summary><button class="demo-btn" data-demo="admin@bikeads.demo|admin123"><strong>Admin</strong><span>admin@bikeads.demo · admin123' + (DELIVERY ? ' · also runs the delivery side' : '') + '</span></button>' +
+      '<button class="demo-btn" data-demo="client@bikeads.demo|client123"><strong>Client</strong><span>client@bikeads.demo · client123</span></button>' + deliverDemo + '</details>' +
+      '</div></div></main>';
     const f = $('#loginform');
     const tryLogin = (email, pw) => {
       const u = Data.list('users').find((x) => x.email.toLowerCase() === email.trim().toLowerCase() && x.password === pw);
-      if (!u) { $('#err').textContent = 'Email or password is wrong.'; return; }
+      if (!u || !views(u.role)) { $('#err').textContent = u ? 'This login is not active right now.' : 'Email or password is wrong.'; return; }
       App.login(u);
     };
     f.addEventListener('submit', (e) => { e.preventDefault(); tryLogin(f.email.value, f.password.value); });
     $$('[data-demo]').forEach((b) => b.addEventListener('click', () => { const [e, p] = b.getAttribute('data-demo').split('|'); f.email.value = e; f.password.value = p; tryLogin(e, p); }));
+    if (booking) setTimeout(() => f.email.focus({ preventScroll: true }), 50);
   }
 
   function renderSignup(app) {
-    app.innerHTML = '<main class="auth"><div class="auth-card">' + brandBlock() + '<h2>Create a client account</h2>' +
+    app.innerHTML = '<main class="auth home v4 login-page">' + loginNav() + '<div class="lpanel login-panel"><div class="auth-card">' + brandBlock() + '<h2>Create a client account</h2>' +
       '<form id="signform" class="form"><label>Your name<input class="input" name="name" required autocomplete="name"></label>' +
       '<label>Company (shown on the red flag)<input class="input" name="company" required autocomplete="organization"></label>' +
       '<label>Phone<input class="input" name="phone" type="tel" autocomplete="tel"></label>' +
       '<label>Email<input class="input" name="email" type="email" required autocomplete="email"></label>' +
       '<label>Password<input class="input" name="password" type="password" minlength="6" required autocomplete="new-password"></label>' +
       '<p class="err" id="err" role="alert"></p><button class="btn primary wide big">Create account</button></form>' +
-      '<p class="center"><a href="#/login">‹ Back to log in</a></p><p class="small muted center">Demo: accounts are saved in this browser only.</p></div></main>';
+      '<p class="center"><a href="#/login">‹ Back to log in</a> · <a href="#/">Main page</a></p><p class="small muted center">Demo: accounts are saved in this browser only.</p></div></div></main>';
     const f = $('#signform');
     f.addEventListener('submit', (e) => {
       e.preventDefault();

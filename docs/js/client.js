@@ -210,23 +210,98 @@
     const now = new Date(); return yy > now.getFullYear() || (yy === now.getFullYear() && mm >= now.getMonth() + 1);
   }
 
+  /* v4.1 (David, Nov 4): more ways to pay — card, Google Pay, Apple Pay (Wallet), Zelle. All demo; each can be
+   * turned off in Admin → Settings → Payment methods. */
+  const PAY_METHODS = [['card', 'Card', '💳'], ['gpay', 'Google Pay', '<b>G</b>'], ['applepay', 'Apple Pay', '<b>Pay</b>'], ['zelle', 'Zelle', '<b>Z</b>']];
+  function payMethods() { const on = Data.settings().payMethods || {}; const l = PAY_METHODS.filter((m) => on[m[0]] !== false); return l.length ? l : PAY_METHODS.slice(0, 1); }
+  function payDesc(b) {
+    const p = b.payment || {};
+    if (p.method === 'zelle') return 'Zelle · note ' + esc(p.ref || '') + (b.depositPaid ? ' · paid' : ' · awaiting Zelle confirmation');
+    if (p.last4) return esc(p.brand) + ' •••• ' + esc(p.last4) + ' (demo)';
+    if (p.brand) return esc(p.brand) + ' (demo)';
+    return '';
+  }
+
+  /* v4.1: one place that books the bikes, for every payment method (card, Google Pay, Apple Pay, Zelle). */
+  function placeBooking(user, pay, action, paid, note) {
+      // pick the bikes: the ones chosen, else free bikes in the chosen area first
+      const free = Data.freeBikes(wiz.start, wiz.end);
+      let ids;
+      if (wiz.specific) {
+        const busy = Data.busyBikeIds(wiz.start, wiz.end);
+        if (wiz.bikeIds.some((id) => busy.has(id))) { toast('Some bikes were just booked. Please pick again.'); wiz.bikeIds = []; wiz.specific = false; go('dates'); return null; }
+        ids = wiz.bikeIds.slice();
+      } else {
+        if (free.length < wiz.count) { toast('Only ' + free.length + ' bikes are free now. Please check the count.'); go('dates'); return null; }
+        const num = (a, b) => a.number.localeCompare(b.number, undefined, { numeric: true });
+        ids = free.filter((x) => x.locationId === wiz.area).sort(num).concat(free.filter((x) => x.locationId !== wiz.area).sort(num)).slice(0, wiz.count).map((x) => x.id);
+      }
+      const qq = Data.priceQuote(ids.length, wiz.start, wiz.end);
+      const b = wiz.biz || {};
+      const now = new Date().toISOString();
+      const rec = Data.put('bookings', {
+        clientId: user.id, clientName: b.contact || user.name, company: b.company || user.company || user.name,
+        contactPhone: b.phone || '', contactEmail: b.email || '', adText: b.adText || '',
+        areaId: wiz.area || '', areaName: areaName(), areaNote: wiz.areaNote || '',
+        start: wiz.start, end: wiz.end, bikeIds: ids, mode: wiz.specific ? 'specific' : 'count',
+        pricePerDay: Math.round(qq.weeklyEach / 7 * 100) / 100, weeks: qq.weeks, setupFeePerBike: qq.setupEach, weeklyPerBike: qq.weeklyEach,
+        setupTotal: qq.setup, weeklyTotal: qq.weekly, total: qq.total, deposit: qq.total, depositPaid: !!paid,
+        payment: Object.assign({ amount: qq.total, at: now }, pay),
+        status: 'pending', notes: note || '', createdAt: now,
+        history: [{ at: now, by: b.contact || user.name, action: action.replace('{amount}', money(qq.total)) }]
+      });
+      return rec;
+  }
+
   function renderPay(root, user) {
     if (!wiz.start || !wiz.end) return go('dates');
     const q = Data.priceQuote(wiz.count, wiz.start, wiz.end);
+    const PM = payMethods(), s = Data.settings();
+    if (!PM.some((m) => m[0] === wiz.pay)) wiz.pay = PM.length ? PM[0][0] : 'card';
+    if (!wiz.zelleRef) wiz.zelleRef = 'MOW-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    const sum = '<table class="price-table"><tbody><tr><td>' + q.bikes + ' bike' + (q.bikes === 1 ? '' : 's') + ' · ' + esc(fmtRange(wiz.start, wiz.end)) + '</td><td class="amt">' + money(q.total) + '</td></tr></tbody></table>';
+    const walletDemo = '<p class="demo-note">Demo — nothing is charged. Real Google Pay and Apple Pay connect once a payment account is set up.</p>';
     root.innerHTML = '<section class="page narrow"><div class="page-head"><button class="back" id="back">‹ Price</button><h1>Payment</h1></div>' + steps4(4) +
-      '<div class="card"><div class="row-between"><h2>Card details</h2><span class="lock"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure checkout</span></div>' +
-      '<div class="paycard" aria-hidden="true"><div class="pc-top"><span>' + esc(Data.settings().businessName || 'BikeAds') + '</span><span id="pc-brand">CARD</span></div><div class="pc-num" id="pc-num">•••• •••• •••• ••••</div><div class="pc-bot"><span id="pc-name">NAME ON CARD</span><span id="pc-exp">MM/YY</span></div></div>' +
+      '<div class="card pay-methods"><h2>How would you like to pay?</h2><div class="pm-grid" role="radiogroup" aria-label="Payment method">' +
+      PM.map(([k, label, ico]) => '<button type="button" class="pm-tile' + (k === wiz.pay ? ' on' : '') + '" role="radio" aria-checked="' + (k === wiz.pay) + '" data-pm="' + k + '"><span class="pm-ico pm-' + k + '" aria-hidden="true">' + ico + '</span><span>' + label + '</span></button>').join('') + '</div></div>' +
+      '<div class="card pm-panel" data-panel="gpay"' + (wiz.pay === 'gpay' ? '' : ' hidden') + '><h2>Google Pay</h2><p class="muted">Pay with a card saved in your Google account.</p>' + sum + '<button type="button" class="btn wide big pill wallet-btn" data-wallet="gpay">Pay with Google Pay</button>' + walletDemo + '</div>' +
+      '<div class="card pm-panel" data-panel="applepay"' + (wiz.pay === 'applepay' ? '' : ' hidden') + '><h2>Apple Pay</h2><p class="muted">Pay with a card in your Apple Wallet.</p>' + sum + '<button type="button" class="btn wide big pill wallet-btn" data-wallet="applepay">Pay with Apple Pay</button>' + walletDemo + '</div>' +
+      '<div class="card pm-panel" data-panel="zelle"' + (wiz.pay === 'zelle' ? '' : ' hidden') + '><h2>Zelle</h2>' +
+      '<ol class="zelle-steps"><li>Open Zelle in your bank app.</li><li>Send <b>' + money(q.total) + '</b> to <b>' + esc(s.zelleName || s.businessName || 'Media on Wheels') + '</b>' + (s.zelleContact ? ' · <b>' + esc(s.zelleContact) + '</b>' : ' <span class="muted">(Zelle email or phone is added in Settings)</span>') + '.</li><li>In the Zelle note, write <b class="zref">' + esc(wiz.zelleRef) + '</b>.</li></ol>' + sum +
+      '<button type="button" class="btn primary wide big pill" id="zelle-sent">I\'ve sent it</button><p class="demo-note">Your booking waits as “Awaiting Zelle confirmation” until we see the money and mark it paid.</p></div>' +
+      '<div class="card pm-panel" data-panel="card"' + (wiz.pay === 'card' ? '' : ' hidden') + '><div class="row-between"><h2>Card details</h2><span class="lock"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure checkout</span></div>' +
+      '<div class="paycard" aria-hidden="true"><div class="pc-top"><span>' + esc(Data.settings().businessName || 'Media on Wheels') + '</span><span id="pc-brand">CARD</span></div><div class="pc-num" id="pc-num">•••• •••• •••• ••••</div><div class="pc-bot"><span id="pc-name">NAME ON CARD</span><span id="pc-exp">MM/YY</span></div></div>' +
       '<form class="form cc-form" id="cc" novalidate autocomplete="on">' +
       '<label>Name on card<input class="input" name="ccname" autocomplete="cc-name" required placeholder="Full name"><span class="fe" id="e-name"></span></label>' +
       '<label>Card number<input class="input" name="ccnum" inputmode="numeric" autocomplete="cc-number" required placeholder="1234 5678 9012 3456" maxlength="23"><span class="fe" id="e-num"></span></label>' +
       '<div class="three"><label>Expiry<input class="input" name="ccexp" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/YY" maxlength="5"><span class="fe" id="e-exp"></span></label>' +
       '<label>CVC<input class="input" name="cccvc" inputmode="numeric" autocomplete="cc-csc" placeholder="123" maxlength="4"><span class="fe" id="e-cvc"></span></label>' +
       '<label>ZIP<input class="input" name="cczip" inputmode="numeric" autocomplete="postal-code" placeholder="10950" maxlength="10"><span class="fe" id="e-zip"></span></label></div>' +
-      '<label>Note for BikeAds (optional)<textarea class="input" name="note" rows="2" placeholder="e.g. please start the bikes on Lee Ave"></textarea></label>' +
+      '<label>Note for ' + esc(Data.settings().businessName || 'Media on Wheels') + ' (optional)<textarea class="input" name="note" rows="2" placeholder="e.g. please start the bikes on Lee Ave"></textarea></label>' +
       '<table class="price-table"><tbody><tr><td>' + q.bikes + ' bike' + (q.bikes === 1 ? '' : 's') + ' · ' + esc(fmtRange(wiz.start, wiz.end)) + '<span class="calc">Printing & setup ' + money(q.setup) + ' + weekly ' + money(q.weekly) + '</span></td><td class="amt">' + money(q.total) + '</td></tr></tbody></table>' +
       '<button class="btn primary wide big" type="submit" id="pay">Pay ' + money(q.total) + '</button>' +
       '<p class="demo-note">Demo — real card processing connects once the payment account is set up. Nothing is charged, and the card number is not saved.</p></form></div></section>';
     $('#back', root).addEventListener('click', () => go('price'));
+    $$('[data-pm]', root).forEach((t) => t.addEventListener('click', () => {
+      wiz.pay = t.getAttribute('data-pm');
+      $$('[data-pm]', root).forEach((x) => { const on = x === t; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
+      $$('[data-panel]', root).forEach((p) => { p.hidden = p.getAttribute('data-panel') !== wiz.pay; });
+    }));
+    $$('[data-wallet]', root).forEach((btn) => btn.addEventListener('click', () => {
+      const k = btn.getAttribute('data-wallet'), name = k === 'gpay' ? 'Google Pay' : 'Apple Pay';
+      const m = UI.modal(name + ' (demo)', '<div class="wallet-sheet"><p class="muted">Pay ' + esc(s.businessName || 'Media on Wheels') + '</p><p class="ws-amt">' + money(q.total) + '</p>' +
+        '<p class="small muted">' + q.bikes + ' bike' + (q.bikes === 1 ? '' : 's') + ' · ' + esc(fmtRange(wiz.start, wiz.end)) + '</p>' +
+        '<button class="btn primary wide big pill" id="ws-ok">Confirm with ' + name + '</button><p class="demo-note">Demo sheet. No money moves.</p></div>');
+      m.querySelector('#ws-ok').addEventListener('click', () => {
+        const rec = placeBooking(user, { method: k, brand: name, demo: true }, 'Requested and paid {amount} with ' + name + ' (demo)', true, f.note.value.trim());
+        UI.closeModal(); if (rec) { wiz.lastId = rec.id; go('done'); }
+      });
+    }));
+    const zs = $('#zelle-sent', root);
+    if (zs) zs.addEventListener('click', () => {
+      const rec = placeBooking(user, { method: 'zelle', brand: 'Zelle', ref: wiz.zelleRef, status: 'awaiting', demo: true }, 'Requested; says {amount} was sent by Zelle, note ' + wiz.zelleRef + ' (awaiting Zelle confirmation)', false, f.note.value.trim());
+      if (rec) { wiz.lastId = rec.id; wiz.zelleRef = null; go('done'); }
+    });
     const f = $('#cc', root);
     const show = () => {
       const n = digits(f.ccnum.value);
@@ -252,33 +327,9 @@
       ok = setErr(f.cccvc, 'e-cvc', !(brand === 'Amex' ? /^\d{4}$/ : /^\d{3}$/).test(f.cccvc.value) ? (brand === 'Amex' ? '4 digits' : '3 digits') : '') && ok;
       ok = setErr(f.cczip, 'e-zip', !/^\d{5}(-\d{4})?$/.test(f.cczip.value) ? '5-digit ZIP' : '') && ok;
       if (!ok) { const bad = f.querySelector('.bad'); if (bad) bad.focus(); return; }
-      // pick the bikes: the ones chosen, else free bikes in the chosen area first
-      const free = Data.freeBikes(wiz.start, wiz.end);
-      let ids;
-      if (wiz.specific) {
-        const busy = Data.busyBikeIds(wiz.start, wiz.end);
-        if (wiz.bikeIds.some((id) => busy.has(id))) { toast('Some bikes were just booked. Please pick again.'); wiz.bikeIds = []; wiz.specific = false; go('dates'); return; }
-        ids = wiz.bikeIds.slice();
-      } else {
-        if (free.length < wiz.count) { toast('Only ' + free.length + ' bikes are free now. Please check the count.'); go('dates'); return; }
-        const num = (a, b) => a.number.localeCompare(b.number, undefined, { numeric: true });
-        ids = free.filter((x) => x.locationId === wiz.area).sort(num).concat(free.filter((x) => x.locationId !== wiz.area).sort(num)).slice(0, wiz.count).map((x) => x.id);
-      }
-      const qq = Data.priceQuote(ids.length, wiz.start, wiz.end);
-      const b = wiz.biz || {};
       const last4 = n.slice(-4);
-      const now = new Date().toISOString();
-      const rec = Data.put('bookings', {
-        clientId: user.id, clientName: b.contact || user.name, company: b.company || user.company || user.name,
-        contactPhone: b.phone || '', contactEmail: b.email || '', adText: b.adText || '',
-        areaId: wiz.area || '', areaName: areaName(), areaNote: wiz.areaNote || '',
-        start: wiz.start, end: wiz.end, bikeIds: ids, mode: wiz.specific ? 'specific' : 'count',
-        pricePerDay: Math.round(qq.weeklyEach / 7 * 100) / 100, weeks: qq.weeks, setupFeePerBike: qq.setupEach, weeklyPerBike: qq.weeklyEach,
-        setupTotal: qq.setup, weeklyTotal: qq.weekly, total: qq.total, deposit: qq.total, depositPaid: true,
-        payment: { method: 'card', brand: brand || 'Card', last4, amount: qq.total, demo: true, at: now },
-        status: 'pending', notes: f.note.value.trim(), createdAt: now,
-        history: [{ at: now, by: b.contact || user.name, action: 'Requested and paid ' + money(qq.total) + ' by ' + (brand || 'card') + ' ending ' + last4 + ' (demo)' }]
-      });
+      const rec = placeBooking(user, { method: 'card', brand: brand || 'Card', last4, demo: true }, 'Requested and paid {amount} by ' + (brand || 'card') + ' ending ' + last4 + ' (demo)', true, f.note.value.trim());
+      if (!rec) return;
       f.reset();
       wiz.lastId = rec.id; go('done');
     });
@@ -288,14 +339,14 @@
     const b = Data.get('bookings', wiz.lastId);
     const J = window.JCal && JCal.ready ? JCal : null;
     root.innerHTML = '<section class="page narrow center"><div class="done-mark" aria-hidden="true">✓</div><h1>Booking confirmed</h1>' +
-      '<p class="lead">Thank you! Your payment went through (demo) and your booking is sent to BikeAds.</p>' +
+      '<p class="lead">' + (b && b.payment && b.payment.method === 'zelle' ? 'Thank you! Your booking is sent. It shows as “Awaiting Zelle confirmation” until we see your Zelle payment.' : 'Thank you! Your payment went through (demo) and your booking is sent to ' + esc(Data.settings().businessName || 'Media on Wheels') + '.') + '</p>' +
       (b ? '<div class="card confirm-card"><dl class="kv wide"><dt>Booking #</dt><dd>' + 'BK-' + esc(String(b.id).slice(-6).toUpperCase()) + '</dd>' +
         '<dt>Business</dt><dd>' + esc(b.company) + '</dd><dt>Area</dt><dd>' + esc(b.areaName || '') + (b.areaNote ? ' · ' + esc(b.areaNote) : '') + '</dd>' +
         '<dt>Dates</dt><dd>' + esc(fmtRange(b.start, b.end)) + (J ? '<br><span class="he" lang="he">' + esc(J.day(b.start).heFull) + ' – ' + esc(J.day(b.end).heFull) + '</span>' : '') + '</dd>' +
         '<dt>Bikes</dt><dd>' + b.bikeIds.length + ' (' + b.bikeIds.map(Data.bikeLabel).join(', ') + ')</dd>' +
         '<dt>Printing & setup</dt><dd>' + money(b.setupTotal) + '</dd><dt>Weekly (' + b.weeks + ' wk)</dt><dd>' + money(b.weeklyTotal) + '</dd>' +
-        '<dt class="hl">Paid</dt><dd class="hl">' + money(b.total) + '</dd><dt>Card</dt><dd>' + esc(b.payment.brand) + ' •••• ' + esc(b.payment.last4) + ' (demo)</dd>' +
-        '<dt>Status</dt><dd><span class="badge st-pending">Pending</span> until BikeAds approves it</dd></dl></div>' : '') +
+        '<dt class="hl">' + (b.depositPaid ? 'Paid' : 'To pay') + '</dt><dd class="hl">' + money(b.total) + '</dd><dt>Payment</dt><dd>' + payDesc(b) + '</dd>' +
+        '<dt>Status</dt><dd><span class="badge st-pending">Pending</span> until ' + esc(Data.settings().businessName || 'Media on Wheels') + ' approves it</dd></dl></div>' : '') +
       '<div class="row-center"><a class="btn primary" href="#/client/bookings" id="tomy">My bookings</a><button class="btn ghost" id="again">Book more</button></div></section>';
     $('#again', root).addEventListener('click', () => { resetWiz(); App.render(); });
     $('#tomy', root).addEventListener('click', () => resetWiz());
@@ -303,7 +354,8 @@
 
   /* ================= MY BOOKINGS ================= */
   function payLine(b) {
-    if (b.payment && b.payment.last4) return 'Total ' + money(b.total) + ' · paid by ' + esc(b.payment.brand) + ' •••• ' + esc(b.payment.last4) + ' (demo)';
+    if (b.payment && b.payment.method === 'zelle') return 'Total ' + money(b.total) + ' · ' + payDesc(b);
+    if (b.payment && (b.payment.last4 || b.payment.brand)) return 'Total ' + money(b.total) + ' · paid by ' + payDesc(b);
     return 'Total ' + money(b.total) + ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid (demo)' : '');
   }
   function renderMine(root, user) {
@@ -330,6 +382,7 @@
   }
 
   window.ClientViews = {
+    PAY_METHODS,
     tabs: [
       { key: 'book', label: 'Book', icon: 'cal', render: renderBook },
       { key: 'bookings', label: 'My bookings', icon: 'list', render: renderMine }

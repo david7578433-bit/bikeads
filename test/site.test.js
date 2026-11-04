@@ -8,7 +8,7 @@ const read = (p) => fs.readFileSync(path.join(site, p), 'utf8');
 
 test('index.html has title, viewport and only local assets that exist', () => {
   const html = read('index.html');
-  assert.match(html, /<title>[^<]*BikeAds[^<]*<\/title>/);
+  assert.match(html, /<title>[^<]*Media on Wheels[^<]*<\/title>/); // v4 brand (Nov 4 2026)
   assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1/);
   const refs = [...html.matchAll(/(?:src|href)="([^"#?]+)(?:\?[^"]*)?"/g)].map((m) => m[1]);
   assert.ok(refs.length >= 8);
@@ -21,7 +21,7 @@ test('index.html has title, viewport and only local assets that exist', () => {
 });
 
 test('no placeholders, no social links, no analytics', () => {
-  for (const f of ['index.html', 'styles.css', 'deliver.css', 'sw.js', 'js/app.js', 'js/admin.js', 'js/client.js', 'js/ui.js', 'js/data.js', 'js/trackers.js', 'js/deliver-core.js', 'js/deliver-seed.js', 'js/deliver.js', 'js/deliver-ui.js', 'js/driver.js', 'js/store.js', 'js/boss.js', 'js/platform.js']) {
+  for (const f of ['index.html', 'styles.css', 'deliver.css', 'sw.js', 'js/app.js', 'js/admin.js', 'js/client.js', 'js/ui.js', 'js/data.js', 'js/trackers.js', 'js/deliver-core.js', 'js/deliver-seed.js', 'js/deliver.js', 'js/deliver-ui.js', 'js/driver.js', 'js/store.js', 'js/boss.js', 'js/platform.js', 'theme.css', 'js/jcal.js', 'js/bikeride.js', 'js/williamsburg-streets.js']) {
     const s = read(f);
     assert.ok(!/lorem ipsum|TODO|FIXME|\{\{/i.test(s), 'placeholder in ' + f);
     assert.ok(!/wa\.me|whatsapp|facebook\.com|instagram\.com|google-analytics|gtag\(/i.test(s), 'social/analytics in ' + f);
@@ -34,7 +34,8 @@ test('core features are present in the app code', () => {
   assert.match(ui, /tile\.openstreetmap\.org/);
   assert.match(admin, /Add tracker/); assert.match(admin, /Approve/); assert.match(admin, /Decline/);
   assert.match(admin, /Calendar/); assert.match(admin, /List/); assert.match(admin, /Reconcile/); assert.match(admin, /Export CSV/);
-  assert.match(client, /Choose a location/); assert.match(client, /Till what day\?/); assert.match(client, /Any 5/); assert.match(client, /Any 10/); assert.match(client, /deposit/);
+  // v3 (Nov 4 2026, David's request): client books Details → Dates & bikes → Price → Payment; the map is admin-only
+  assert.match(client, /Where should the bikes ride\?/); assert.match(client, /Confirm booking/); assert.match(client, /Printing & setup/); assert.match(client, /Weekly charge/); assert.match(client, /Card number/);
   assert.match(app, /admin@bikeads\.demo/); assert.match(app, /client@bikeads\.demo/); assert.match(app, /Create a client account/);
 });
 

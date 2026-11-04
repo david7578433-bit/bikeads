@@ -175,7 +175,8 @@
       items.map(([i, t, what, need]) => '<section class="card"><h2>' + i + ' ' + esc(t) + ' <span class="cl-tag">Connect later</span></h2><p>' + esc(what) + '</p><p class="small"><b>Needed from David:</b> ' + esc(need) + '</p><p class="small muted">Status: not connected</p></section>').join('') + '</div>';
   }
 
-  /* add the tab to the existing admin, before Settings */
+  /* add the tab to the existing admin, before Settings — only while the delivery module is on (js/config.js) */
+  if (!(window.FEATURES && FEATURES.delivery)) return;
   const tab = { key: 'deliver', label: 'Deliver', icon: 'box', render, badge: () => (typeof Deliver !== 'undefined' ? Deliver.day(Data.today()).filter((o) => o.status === 'failed').length : 0) };
   const i = AdminViews.tabs.findIndex((t) => t.key === 'settings');
   AdminViews.tabs.splice(i < 0 ? AdminViews.tabs.length : i, 0, tab);

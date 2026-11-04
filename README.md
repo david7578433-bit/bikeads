@@ -1,4 +1,36 @@
-# BikeAds — bike advertising fleet + BikeAds Deliver (v2 demo)
+# Media on Wheels (repo: bikeads) — ads on grocery-delivery bikes
+
+Media on Wheels puts local businesses' ads on the grocery-delivery bikes of Williamsburg and Boro Park. This repo keeps its original name (`bikeads`) and URLs.
+
+Live demo (still v3.1 until approved): https://bikeads.sites.tab.bot/ and https://david7578433-bit.github.io/bikeads/
+v4 preview (branch `v4-light`): https://mediaonwheels-preview.sites.tab.bot/
+
+In this repo the site lives in `docs/` (GitHub Pages serves that folder from `main`).
+
+## v4 (Nov 4, 2026, branch `v4-light`) — "Media on Wheels", calm light look, open main page
+- **Brand:** "Media on Wheels" everywhere visitors look (title, header, main page, booking, app name). Demo logins keep their `@bikeads.demo` emails.
+- **Look:** one soft pastel-blue rounded panel, lots of white space, DM Serif Display headlines (SIL OFL, `docs/fonts/`), Plus Jakarta Sans / Heebo body, pill buttons (black primary, white secondary), minimal top nav with a black "Log in" pill, a small floating dock (Book bikes / Prices / Contact). Same look on login, client booking, admin and the other roles. Styles: `docs/light.css` (loaded last; restyles only).
+- **Main page = open one-pager (no login wall)** — `docs/js/home.js`: big street video → What we do → How it works → Prices (from Admin → Settings prices) → Videos → How many people see us → Feedback → Why us → Our story → Contact / Book. Stats, reviews and story are clearly marked **SAMPLE** until the owner edits them in **Admin → Settings → "Main page content"** (also headline, contact phone/email, extra video links). No photos of people.
+- **Main page video** (`docs/js/homevideo.js`): default is real drone footage over Williamsburg — "Aerial view of MTA Subway Trains on Williamsburg Bridge…" by **the Dronalist**, **CC BY 3.0**, via Wikimedia Commons (credit shown on the video and in the footer). Cut to 16 s, 1280x720, 2.8 MB (`docs/media/hero-williamsburg.mp4`, phone version + poster beside it). Autoplay muted loop playsinline, poster first, reduced-motion = still poster. **Admin → Settings → "Main page video"**: upload MP4/WebM (saved in this browser's IndexedDB — demo) or paste an https video link, optional poster, preview, "Use default video". Real shared storage is needed before an uploaded file shows to every visitor; a pasted link already works for everyone.
+- **More ways to pay** (client payment step): Card, Google Pay, Apple Pay, Zelle — all DEMO, nothing is charged. Google Pay / Apple Pay show a demo confirm sheet; Zelle shows the amount, the Zelle name + email/phone and a booking reference, and "I've sent it" files the booking as "Awaiting Zelle confirmation" until the admin taps "Mark Zelle paid". **Admin → Settings → "Payment methods"** turns each on/off and holds the Zelle details. Real Google Pay / Apple Pay need a payment processor account (e.g. Stripe).
+- The v3.1 Williamsburg ad-bike animation now sits in the Videos section of the main page.
+
+## Delivery module — saved, off
+The separate delivery business (Driver, Store, Boss/dispatch apps, the admin "Deliver" tab, delivery orders, bag labels, tracking, customer texts, invoices, driver pay) is **still in the code** (`docs/js/deliver*.js`, `driver.js`, `store.js`, `boss.js`, `platform.js`, `deliver.css`) but **turned off** by one switch in `docs/js/config.js`:
+
+```js
+window.FEATURES = Object.freeze({ delivery: false });
+```
+
+While it is `false`: no delivery pages, tabs, roles, demo logins or mentions appear; driver/store/boss logins answer "This login is not active right now"; delivery-only bookkeeping categories are hidden. Set it to `true` and everything comes back (checked: driver, store and boss apps open, admin gets its Deliver tab, the demo logins reappear). Nothing was deleted.
+
+## Making v4 live (only on the owner's OK)
+`tools/make-live.sh` — dry run by default; `tools/make-live.sh --go` fast-forwards `main` to `v4-light` on GitHub (GitHub Pages then serves it).
+
+---
+
+## Earlier versions
+
 
 A simple two-sided web app for a bike-advertising business: every bike carries an ad and a GPS tracker; advertisers ("clients") book bikes.
 

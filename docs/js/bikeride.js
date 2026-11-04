@@ -54,7 +54,7 @@
     function paintBackground() {
       const off = document.createElement('canvas'); off.width = cv.width; off.height = cv.height;
       const g = off.getContext('2d'); g.scale(dpr, dpr);
-      g.fillStyle = '#e9edf5'; g.fillRect(0, 0, W, Hh);
+      g.fillStyle = opts.bg || '#e9edf5'; g.fillRect(0, 0, W, Hh); // v4: optional calm background (opts.bg)
       // park-ish tint + river edge hint
       g.lineCap = 'round'; g.lineJoin = 'round';
       const path = (p) => { g.beginPath(); p.forEach((q, i) => (i ? g.lineTo(px(q[0]), py(q[1])) : g.moveTo(px(q[0]), py(q[1])))); };
@@ -69,7 +69,7 @@
         const p = at(r, r.L * (0.38 + (j % 3) * 0.12));
         let ang = Math.atan2(p.dy, p.dx); if (ang > Math.PI / 2) ang -= Math.PI; if (ang < -Math.PI / 2) ang += Math.PI;
         g.save(); g.translate(px(p.x), py(p.y)); g.rotate(ang); g.translate(0, -9 * Math.max(.7, k));
-        g.fillStyle = 'rgba(233,237,245,.85)'; const tw = g.measureText(LABELS[n]).width; g.fillRect(-tw / 2 - 3, -7, tw + 6, 14);
+        g.fillStyle = opts.bg ? opts.bg : 'rgba(233,237,245,.85)'; const tw = g.measureText(LABELS[n]).width; g.fillRect(-tw / 2 - 3, -7, tw + 6, 14);
         g.fillStyle = '#6b7590'; g.fillText(LABELS[n], 0, 0); g.restore();
       });
       g.fillStyle = 'rgba(15,23,42,.55)'; g.font = '800 ' + Math.round(Math.max(12, 15 * Math.min(1.3, k))) + 'px "Plus Jakarta Sans", system-ui, sans-serif';
