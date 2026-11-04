@@ -34,6 +34,9 @@
   };
   */
 
+  /* v3: client checkout prices. SAMPLE numbers until David sets the real ones (Admin → Settings). */
+  const SAMPLE_PRICES = { setupFeePerBike: 75, weeklyPerBike: 150 };
+
   const uid = (p) => (p || 'id') + '_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
   const pad = (n) => String(n).padStart(2, '0');
   const iso = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -114,7 +117,7 @@
     ];
     const base = {
       users, locations, bikes, bookings, transactions, reconciliations: [],
-      settings: { businessName: 'BikeAds', pricePerBikeDay: price, depositPct: 20, openingBalance: 0, seededAt: new Date().toISOString(), version: 1 }
+      settings: { businessName: 'BikeAds', pricePerBikeDay: price, depositPct: 20, openingBalance: 0, seededAt: new Date().toISOString(), version: 1, setupFeePerBike: SAMPLE_PRICES.setupFeePerBike, weeklyPerBike: SAMPLE_PRICES.weeklyPerBike, pricesAreSamples: true }
     };
     addDeliver(base);
     return base;
@@ -145,6 +148,12 @@
       state = await adapter.loadAll();
       if (!state || !state.settings || state.settings.version !== 1) { state = seed(); await persist('all'); }
       COLLECTIONS.forEach((c) => { if (!Array.isArray(state[c])) state[c] = []; });
+      if (state.settings.setupFeePerBike == null || state.settings.weeklyPerBike == null) {
+        state.settings.setupFeePerBike = state.settings.setupFeePerBike == null ? SAMPLE_PRICES.setupFeePerBike : state.settings.setupFeePerBike;
+        state.settings.weeklyPerBike = state.settings.weeklyPerBike == null ? SAMPLE_PRICES.weeklyPerBike : state.settings.weeklyPerBike;
+        if (state.settings.pricesAreSamples == null) state.settings.pricesAreSamples = true;
+        await persist('settings');
+      }
       if (addDeliver(state)) await persist('all');
       else if (typeof window !== 'undefined' && window.DeliverSeed && window.DeliverSeed.rollDay(state, { uid, iso, addDays, today })) await persist('all');
       return Data;
@@ -187,6 +196,17 @@
       const deposit = Math.round(total * (s.depositPct / 100) * 100) / 100;
       return { days, total, deposit, pricePerDay: s.pricePerBikeDay, depositPct: s.depositPct };
     },
+    /* v3 checkout: printing & setup (one time, per bike) + weekly charge (per bike per week). */
+    weeks(start, end) { return Math.max(1, Math.ceil(Data.days(start, end) / 7)); },
+    priceQuote(nBikes, start, end) {
+      const s = state.settings, n = Math.max(0, nBikes | 0);
+      const days = Data.days(start, end), weeks = Data.weeks(start, end);
+      const setupEach = +s.setupFeePerBike || 0, weeklyEach = +s.weeklyPerBike || 0;
+      const r2 = (x) => Math.round(x * 100) / 100;
+      const setup = r2(n * setupEach), weekly = r2(n * weeklyEach * weeks);
+      return { bikes: n, days, weeks, setupEach, weeklyEach, setup, weeklyPerWeek: r2(n * weeklyEach), weekly, total: r2(setup + weekly), samples: !!s.pricesAreSamples };
+    },
+    SAMPLE_PRICES,
     bike(id) { return Data.get('bikes', id); },
     bikeLabel(id) { const b = Data.get('bikes', id); return b ? '#' + b.number : '?'; }
   };

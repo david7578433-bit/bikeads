@@ -6,6 +6,15 @@ Live demo: https://bikeads.sites.tab.bot/ and https://david7578433-bit.github.io
 
 In this repo the site lives in `docs/` (GitHub Pages serves that folder).
 
+
+## v3 (Nov 4, 2026) — modern look, new client checkout, Jewish calendar
+- New type: Plus Jakarta Sans for English and Heebo for Hebrew/Yiddish (both SIL Open Font License, files in `docs/fonts/`), with a calm indigo accent (`docs/theme.css`).
+- Client booking is now 4 steps: 1 Details & area → 2 Dates (calendar) & number of bikes (+/−) → 3 Price (printing & setup per bike, one time + weekly charge per bike per week) → 4 Card payment → confirmation. The card step is a DEMO: nothing is charged and only the last 4 digits are kept on the booking.
+- Prices are SAMPLE numbers (75 per bike printing & setup, 150 per bike per week) until set in Admin → Settings → "Client checkout prices".
+- Calendars show the English date plus the Hebrew date (e.g. כ״ד חשון), Shabbos, Yom Tov, Chol Hamoed, Chanukah, Purim, fasts and Rosh Chodesh, computed in the browser with @hebcal/core (`docs/vendor/hebcal`, GPL-2.0-or-later). Diaspora schedule.
+- The map is admin-only now; clients no longer have a Map tab.
+- A looping animation of ad bikes riding around Williamsburg sits on the client booking steps (more bikes appear as the count goes up). Street outline from OpenStreetMap (© OpenStreetMap contributors).
+
 ## Demo logins
 - Admin: `admin@bikeads.demo` / `admin123` (runs both the bike ads and BikeAds Deliver)
 - Client: `client@bikeads.demo` / `client123`

@@ -137,8 +137,9 @@
   function bookingRow(b) {
     const s = statusOf(b);
     return '<div class="bk-row"><div class="bk-main"><div class="bk-title"><strong>' + esc(b.company) + '</strong> ' + badge(b) + '</div>' +
-      '<div class="small">' + fmtRange(b.start, b.end) + ' · ' + Data.days(b.start, b.end) + ' days · ' + b.bikeIds.length + ' bikes (' + b.bikeIds.map(Data.bikeLabel).join(', ') + ')' + (b.mode !== 'specific' ? ' · asked for any ' + b.mode.replace('any', '') : '') + '</div>' +
-      '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid (demo)' : ' not paid') + '</div></div>' +
+      '<div class="small">' + fmtRange(b.start, b.end) + ' · ' + Data.days(b.start, b.end) + ' days · ' + b.bikeIds.length + ' bikes (' + b.bikeIds.map(Data.bikeLabel).join(', ') + ')' + (b.mode === 'count' ? ' · client asked for ' + b.bikeIds.length + ' bikes' : b.mode !== 'specific' ? ' · asked for any ' + b.mode.replace('any', '') : '') + '</div>' +
+      '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + (b.payment && b.payment.last4 ? ' · paid in full by ' + esc(b.payment.brand) + ' •••• ' + esc(b.payment.last4) + ' (demo)' : ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid (demo)' : ' not paid')) + '</div>' +
+      (b.setupTotal != null ? '<div class="small muted">Printing &amp; setup ' + money(b.setupTotal) + ' · weekly ' + money(b.weeklyTotal) + ' (' + b.weeks + ' wk)' + (b.areaName ? ' · area: ' + esc(b.areaName) : '') + (b.areaNote ? ' (' + esc(b.areaNote) + ')' : '') + (b.contactPhone ? ' · ' + esc(b.contactPhone) : '') + '</div>' : '') + '</div>' +
       '<div class="bk-actions">' + (s === 'pending' ? '<button class="btn ok" data-approve="' + b.id + '">✓ Approve</button><button class="btn danger-ghost" data-decline="' + b.id + '">✕ Decline</button>' : '') +
       '<button class="btn ghost" data-open="' + b.id + '">Edit</button></div></div>';
   }
@@ -194,7 +195,7 @@
       Data.put('bookings', { id, status: 'approved', history: addHistory(b, 'Approved') });
       let note = 'Booking approved';
       if (b.depositPaid && !Data.list('transactions').some((t) => t.bookingId === id && t.category === 'Booking deposit')) {
-        Data.put('transactions', { date: Data.today(), description: 'Deposit ' + Data.settings().depositPct + '% - ' + b.company, amount: b.deposit, category: 'Booking deposit', bookingId: id, reconciled: false, createdAt: new Date().toISOString() });
+        Data.put('transactions', { date: Data.today(), description: (b.payment && b.payment.last4 ? 'Card payment (demo) ' + b.payment.brand + ' ' + b.payment.last4 + ' - ' : 'Deposit ' + Data.settings().depositPct + '% - ') + b.company, amount: b.deposit, category: 'Booking deposit', bookingId: id, reconciled: false, createdAt: new Date().toISOString() });
         note += ' · deposit added to the books';
       }
       toast(note); App.render();
@@ -392,12 +393,19 @@
       '<div class="two"><label>Price per bike per day ($)<input class="input" type="number" step="0.01" min="0" name="pricePerBikeDay" value="' + s.pricePerBikeDay + '"></label>' +
       '<label>Deposit (%)<input class="input" type="number" step="1" min="0" max="100" name="depositPct" value="' + s.depositPct + '"></label></div>' +
       '<label>Bank opening balance ($)<input class="input" type="number" step="0.01" name="openingBalance" value="' + (s.openingBalance || 0) + '"></label>' +
+      '<h2 style="margin-top:.6rem">Client checkout prices</h2>' +
+      (s.pricesAreSamples ? '<div class="sample-note" role="note"><span aria-hidden="true">ℹ️</span><span><strong>These are sample prices.</strong> Type your real prices and save; clients see them on the price page.</span></div>' : '') +
+      '<div class="two"><label>Printing &amp; setup, per bike, one time ($)<input class="input" type="number" step="0.01" min="0" name="setupFeePerBike" value="' + (s.setupFeePerBike != null ? s.setupFeePerBike : 75) + '"></label>' +
+      '<label>Weekly charge, per bike per week ($)<input class="input" type="number" step="0.01" min="0" name="weeklyPerBike" value="' + (s.weeklyPerBike != null ? s.weeklyPerBike : 150) + '"></label></div>' +
+      '<label class="check"><input type="checkbox" name="pricesAreSamples"' + (s.pricesAreSamples ? ' checked' : '') + '> Still sample prices (shows a "sample prices" note to clients)</label>' +
       '<div class="row-end"><button class="btn primary">Save settings</button></div></form>' +
       '<div class="card"><h2>GPS trackers</h2><p>Status: <strong>' + (TrackerFeed.isLive() ? 'Live' : 'Simulator (demo positions)') + '</strong></p><p class="muted">When you tell us the tracker brand (or the app you use to see them), we connect its live feed here. Each bike is matched by its tracker ID.</p></div>' +
       '<div class="card"><h2>Demo data</h2><p class="muted">In this first version everything is saved in this browser only, so each phone or computer has its own copy. A shared database comes next.</p><button class="btn danger-ghost" id="reset">Reset demo data</button></div></section>';
     $('#setform', root).addEventListener('submit', (e) => {
       e.preventDefault(); const f = e.target;
-      Data.saveSettings({ businessName: f.businessName.value.trim() || 'BikeAds', pricePerBikeDay: +f.pricePerBikeDay.value || 0, depositPct: Math.min(100, Math.max(0, +f.depositPct.value || 0)), openingBalance: +f.openingBalance.value || 0 });
+      const priceChanged = +f.setupFeePerBike.value !== +s.setupFeePerBike || +f.weeklyPerBike.value !== +s.weeklyPerBike;
+      Data.saveSettings({ businessName: f.businessName.value.trim() || 'BikeAds', pricePerBikeDay: +f.pricePerBikeDay.value || 0, depositPct: Math.min(100, Math.max(0, +f.depositPct.value || 0)), openingBalance: +f.openingBalance.value || 0,
+        setupFeePerBike: Math.max(0, +f.setupFeePerBike.value || 0), weeklyPerBike: Math.max(0, +f.weeklyPerBike.value || 0), pricesAreSamples: priceChanged && s.pricesAreSamples ? false : f.pricesAreSamples.checked });
       toast('Settings saved'); App.render();
     });
     $('#reset', root).addEventListener('click', () => confirmBox('Reset demo data?', 'All bikes, bookings and transactions go back to the demo set.', 'Reset', async () => { await Data.reset(); toast('Demo data reset'); App.render(); }, true));

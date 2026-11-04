@@ -216,25 +216,52 @@
     });
   }
 
-  /* ---------- month calendar ---------- */
+  /* ---------- month calendar (v3: English + Hebrew/Yiddish dates, Yom Tov, Shabbos) ---------- */
+  const DOW_HE = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש״ק'];
   function calendarHtml(year, month, o) {
     o = o || {};
+    const J = window.JCal && window.JCal.ready ? window.JCal : null;
     const first = new Date(year, month, 1);
     const startDow = first.getDay();
     const daysIn = new Date(year, month + 1, 0).getDate();
-    let html = '<div class="cal-head"><button class="icon-btn" data-cal-nav="-1" aria-label="Previous month">‹</button><h3>' + MONTHS[month] + ' ' + year + '</h3><button class="icon-btn" data-cal-nav="1" aria-label="Next month">›</button></div>';
-    html += '<div class="cal-grid" role="grid">' + DOW.map((d) => '<div class="cal-dow">' + d + '</div>').join('');
+    const heLabel = J ? J.monthLabel(year, month) : '';
+    let html = '<div class="cal-head"><button class="icon-btn" data-cal-nav="-1" aria-label="Previous month">‹</button><h3><span>' + MONTHS[month] + ' ' + year + '</span>' + (heLabel ? '<span class="cal-he" lang="he">' + esc(heLabel) + '</span>' : '') + '</h3><button class="icon-btn" data-cal-nav="1" aria-label="Next month">›</button></div>';
+    html += '<div class="cal-grid" role="grid">' + DOW.map((d, i) => '<div class="cal-dow' + (i === 6 ? ' shab' : '') + '">' + (i === 6 ? 'Shabbos' : d) + (J ? '<small lang="he">' + DOW_HE[i] + '</small>' : '') + '</div>').join('');
     for (let i = 0; i < startDow; i++) html += '<div class="cal-cell empty"></div>';
     const t = Data.today();
     for (let d = 1; d <= daysIn; d++) {
       const ds = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
       const dis = o.isDisabled ? o.isDisabled(ds) : false;
       const inRange = o.rangeStart && ds >= o.rangeStart && ds <= (o.rangeEnd || o.rangeStart);
-      const cls = ['cal-cell', ds === t ? 'today' : '', dis ? 'disabled' : '', inRange ? 'in-range' : '', ds === o.rangeStart ? 'range-start' : '', ds === o.rangeEnd ? 'range-end' : '', ds < t ? 'past' : ''].join(' ');
-      html += '<div class="' + cls + '" role="gridcell" data-date="' + ds + '"' + (dis ? ' aria-disabled="true"' : ' tabindex="0"') + '><span class="cal-num">' + d + '</span>' + (o.cell ? o.cell(ds) : '') + '</div>';
+      const jd = J ? J.day(ds) : null;
+      const ev = jd && jd.events[0];
+      const cls = ['cal-cell', ds === t ? 'today' : '', dis ? 'disabled' : '', inRange ? 'in-range' : '', ds === o.rangeStart ? 'range-start' : '', ds === o.rangeEnd ? 'range-end' : '', ds < t ? 'past' : '',
+        jd && jd.shabbos ? 'shab' : '', ev && (ev.kind === 'yt' || ev.kind === 'fest') ? 'k-' + ev.kind + '-day' : ''].join(' ');
+      let title = '';
+      if (jd) title = jd.heFull + ' · ' + jd.enHeb + (jd.shabbos ? ' · Shabbos' + (jd.parsha ? ' ' + jd.parsha.en.replace(/^Parshas /, '') : '') : '') + jd.events.map((e) => ' · ' + e.en).join('');
+      const hd = jd ? '<span class="cal-hd" lang="he">' + esc(jd.heDay) + ((jd.hebDayNum === 1 || d === 1) ? ' <span class="hm">' + esc(jd.heMonth) + '</span>' : '') + '</span>' : '';
+      const hol = ev ? '<span class="cal-hol k-' + ev.kind + '">' + esc(ev.en) + '</span>' : '';
+      html += '<div class="' + cls + '" role="gridcell" data-date="' + ds + '"' + (title ? ' title="' + esc(title) + '" aria-label="' + esc(MONTHS[month] + ' ' + d + ', ' + title) + '"' : '') + (dis ? ' aria-disabled="true"' : ' tabindex="0"') + '><span class="cal-top"><span class="cal-num">' + d + '</span>' + hd + '</span>' + (o.cell ? o.cell(ds) : '') + hol + '</div>';
     }
-    return html + '</div>';
+    html += '</div>';
+    if (J && o.holidays !== false) {
+      const list = J.monthRows(year, month);
+      html += '<div class="cal-legend"><span class="cal-hol k-yt">Yom Tov</span><span class="cal-hol k-chm">Chol Hamoed</span><span class="cal-hol k-fest">Chanukah · Purim</span><span class="cal-hol k-fast">Fast</span><span class="cal-hol k-rc">Rosh Chodesh</span><span>Shabbos shaded</span></div>';
+      if (list.length) {
+        const short = (ds) => fmtDate(ds, { weekday: 'short', month: 'short', day: 'numeric' });
+        const day = (ds) => fmtDate(ds, { month: 'short', day: 'numeric' });
+        html += '<ul class="hol-list" aria-label="Jewish holidays this month">' + list.map((r) => {
+          const a = J.day(r.from), b = J.day(r.to);
+          const when = r.from === r.to ? short(r.from) : day(r.from) + ' – ' + fmtDate(r.to, { day: 'numeric' });
+          const heWhen = r.from === r.to ? a.heDay + ' ' + a.heMonth : a.heDay + ' ' + a.heMonth + ' – ' + b.heDay + ' ' + b.heMonth;
+          return '<li><span class="d">' + esc(when) + '</span><span class="n"><span class="cal-hol k-' + r.kind + '">' + esc(r.en) + '</span></span><span class="h" lang="he" dir="rtl">' + esc(r.he) + ' · ' + esc(heWhen) + '</span></li>';
+        }).join('') + '</ul>';
+      } else {
+        html += '<p class="small muted" style="margin-top:.5rem">No Yom Tov or fast days this month.</p>';
+      }
+    }
+    return html;
   }
 
-  window.UI = { esc, money, fmtDate, fmtRange, ago, $, $$, toast, modal, closeModal, confirmBox, statusOf, badge, STATUS_LABEL, createBikeMap, mapControlsHtml, bikeListHtml, wireMapControls, calendarHtml, MONTHS, flagStore };
+  window.UI = { DOW_HE, esc, money, fmtDate, fmtRange, ago, $, $$, toast, modal, closeModal, confirmBox, statusOf, badge, STATUS_LABEL, createBikeMap, mapControlsHtml, bikeListHtml, wireMapControls, calendarHtml, MONTHS, flagStore };
 })();
