@@ -58,34 +58,28 @@
   /* ---- step 1: business details + area ---- */
   function renderDetails(root, user) {
     const b = bizOf(user);
-    const locs = Data.list('locations');
     root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>Book ad bikes</h1></div>' + steps4(1) +
       '<form class="card form" id="det" novalidate><h2>Your business</h2>' +
-      '<label>Business name (shown on the ads)<input class="input" name="company" required autocomplete="organization" value="' + esc(b.company) + '" placeholder="e.g. Fresh Basket Grocery"></label>' +
-      '<div class="two"><label>Contact name<input class="input" name="contact" autocomplete="name" value="' + esc(b.contact) + '"></label>' +
-      '<label>Phone<input class="input" name="phone" type="tel" inputmode="tel" autocomplete="tel" value="' + esc(b.phone) + '" placeholder="(845) 555-0123"></label></div>' +
-      '<label>Email<input class="input" name="email" type="email" autocomplete="email" value="' + esc(b.email) + '"></label>' +
-      '<fieldset><legend>Where should the bikes ride?</legend><div class="area-grid">' + locs.map((l) => {
-        const n = Data.list('bikes').filter((x) => x.locationId === l.id).length;
-        return '<label class="area-opt"><input type="radio" name="area" value="' + l.id + '"' + (wiz.area === l.id ? ' checked' : '') + '>' + esc(l.name) + '<small>' + n + ' bike' + (n === 1 ? '' : 's') + ' based here</small></label>';
-      }).join('') + '</div>' +
-      '<label style="margin-top:.6rem">Streets or blocks you want (optional) <span class="lbl-note">e.g. Lee Ave from Division to Rutledge</span><input class="input" name="areaNote" value="' + esc(wiz.areaNote) + '"></label></fieldset>' +
-      '<label>What the ad says (optional)<textarea class="input" name="adText" rows="2" placeholder="e.g. Fresh Basket — open Motzei Shabbos till 1am">' + esc(b.adText) + '</textarea></label>' +
+      /* Nov 8 2026 (client Shimon): step 1 asks ONLY business / company name, email and phone. The area, streets and ad-text questions were taken off. */
+      '<label>Business / company name (shown on the ads)<input class="input" name="company" required autocomplete="organization" value="' + esc(b.company) + '" placeholder="e.g. Fresh Basket Grocery"></label>' +
+      '<label>Email address<input class="input" name="email" type="email" required autocomplete="email" value="' + esc(b.email) + '"></label>' +
+      '<label>Phone number<input class="input" name="phone" type="tel" inputmode="tel" required autocomplete="tel" value="' + esc(b.phone) + '" placeholder="(845) 555-0123"></label>' +
       '<p class="err" id="det-err" role="alert"></p>' +
       '<div class="flow-actions"><span class="small muted">Step 1 of 4</span><button class="btn primary big" type="submit">Next: dates & bikes ›</button></div></form>' +
       /* Nov 8 2026: the client asked to take the "Your ad riding in Williamsburg" preview off this step (rideCard kept in the code) */
       '</section>';
     const f = $('#det', root);
     const save = () => {
-      Object.assign(b, { company: f.company.value.trim(), contact: f.contact.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim(), adText: f.adText.value.trim() });
-      const a = f.querySelector('input[name=area]:checked'); wiz.area = a ? a.value : ''; wiz.areaNote = f.areaNote.value.trim();
+      Object.assign(b, { company: f.company.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim() });
+      wiz.area = ''; wiz.areaNote = ''; /* no longer asked */
     };
     f.company.addEventListener('input', () => { b.company = f.company.value.trim(); updRide(); });
     f.addEventListener('submit', (e) => {
       e.preventDefault(); save();
       const err = $('#det-err', root);
       if (!b.company) { err.textContent = 'Please type the business name.'; f.company.focus(); return; }
-      if (!wiz.area && !wiz.areaNote) { err.textContent = 'Please pick where the bikes should ride.'; return; }
+      if (!b.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email)) { err.textContent = 'Please type a good email address.'; f.email.focus(); return; }
+      if (b.phone.replace(/\D/g, '').length < 7) { err.textContent = 'Please type the phone number.'; f.phone.focus(); return; }
       go('dates');
     });
   }
@@ -191,7 +185,7 @@
     const J = window.JCal && JCal.ready ? JCal : null;
     const promoBox = '<form class="promo" id="promo" novalidate><label>Promo code (optional)<span class="promo-row"><input class="input" name="code" autocomplete="off" value="' + esc(wiz.promo ? wiz.promo.code || '' : '') + '"><button class="btn" type="submit">' + (wiz.promo ? 'Change' : 'Apply') + '</button></span></label><p class="small" id="promo-msg" role="status">' + (wiz.promo ? '✓ ' + esc(wiz.promo.label || 'Promo code') + ': ' + (+wiz.promo.pct) + '% off' : '') + '</p></form>';
     root.innerHTML = '<section class="page narrow"><div class="page-head"><button class="back" id="back">‹ Dates & bikes</button><h1>Your price</h1></div>' + steps4(3) +
-      '<div class="card"><div class="sel-sum"><strong>' + esc(wiz.biz ? wiz.biz.company : '') + '</strong><span>' + esc(areaName()) + '</span><span>' + esc(fmtRange(wiz.start, wiz.end)) + ' · ' + q.days + ' days</span>' +
+      '<div class="card"><div class="sel-sum"><strong>' + esc(wiz.biz ? wiz.biz.company : '') + '</strong>' + (areaName() ? '<span>' + esc(areaName()) + '</span>' : '') + '<span>' + esc(fmtRange(wiz.start, wiz.end)) + ' · ' + q.days + ' days</span>' +
       (J ? '<span class="he" lang="he">' + esc(J.day(wiz.start).heFull) + ' – ' + esc(J.day(wiz.end).heFull) + '</span>' : '') + '</div>' +
       '<div class="bike-row" style="margin:.9rem 0 .3rem"><div><strong>Bikes</strong><div class="small muted">' + (wiz.specific ? 'Bikes ' + wiz.bikeIds.map(Data.bikeLabel).join(', ') : 'Up to ' + free.length + ' free for these dates') + '</div></div>' +
       '<div class="stepper" role="group" aria-label="Number of bikes"><button type="button" id="minus" aria-label="One bike less"' + (q.bikes <= MIN_BIKES() || wiz.specific ? ' disabled' : '') + '>−</button><output id="cnt" aria-live="polite">' + q.bikes + '</output><button type="button" id="plus" aria-label="One bike more"' + (q.bikes >= free.length || wiz.specific ? ' disabled' : '') + '>+</button></div></div>' + minNote() +
@@ -371,7 +365,7 @@
     root.innerHTML = '<section class="page narrow center"><div class="done-mark" aria-hidden="true">✓</div><h1>Booking confirmed</h1>' +
       '<p class="lead">' + (b && b.payment && b.payment.method === 'zelle' ? 'Thank you! Your booking is sent. It shows as “Awaiting Zelle confirmation” until we see your Zelle payment.' : 'Thank you! Your deposit went through (demo) and your booking is sent to ' + esc(Data.settings().businessName || 'Media on Wheels') + '.') + '</p>' +
       (b ? '<div class="card confirm-card"><dl class="kv wide"><dt>Booking #</dt><dd>' + 'BK-' + esc(String(b.id).slice(-6).toUpperCase()) + '</dd>' +
-        '<dt>Business</dt><dd>' + esc(b.company) + '</dd><dt>Area</dt><dd>' + esc(b.areaName || '') + (b.areaNote ? ' · ' + esc(b.areaNote) : '') + '</dd>' +
+        '<dt>Business</dt><dd>' + esc(b.company) + '</dd>' + (b.areaName || b.areaNote ? '<dt>Area</dt><dd>' + esc(b.areaName || '') + (b.areaNote ? ' · ' + esc(b.areaNote) : '') + '</dd>' : '') +
         '<dt>Dates</dt><dd>' + esc(fmtRange(b.start, b.end)) + (J ? '<br><span class="he" lang="he">' + esc(J.day(b.start).heFull) + ' – ' + esc(J.day(b.end).heFull) + '</span>' : '') + '</dd>' +
         '<dt>Bikes</dt><dd>' + b.bikeIds.length + '</dd>' + /* Nov 8 2026 (client): count only, no bike numbers (admin still sees them) */
         '<dt>Printing & setup</dt><dd>' + money(b.setupTotal) + '</dd><dt>Weekly (' + b.weeks + ' wk)</dt><dd>' + money(b.weeklyTotal) + '</dd>' +

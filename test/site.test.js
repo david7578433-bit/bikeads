@@ -36,7 +36,7 @@ test('core features are present in the app code', () => {
   assert.match(admin, /Add tracker/); assert.match(admin, /Approve/); assert.match(admin, /Decline/);
   assert.match(admin, /Calendar/); assert.match(admin, /List/); assert.match(admin, /Reconcile/); assert.match(admin, /Export CSV/);
   // v3 (Nov 4 2026, David's request): client books Details → Dates & bikes → Price → Payment; the map is admin-only
-  assert.match(client, /Where should the bikes ride\?/); assert.match(client, /Confirm booking/); assert.match(client, /Printing & setup/); assert.match(client, /Weekly charge/); assert.match(client, /Card number/);
+  assert.match(client, /Business \/ company name/); assert.match(client, /Email address/); assert.match(client, /Phone number/); assert.match(client, /Confirm booking/); assert.match(client, /Printing & setup/); assert.match(client, /Weekly charge/); assert.match(client, /Card number/);
   assert.ok(!/@bikeads\.demo/.test(app), 'no demo logins (Nov 8 2026)'); assert.match(app, /Create a client account/); assert.match(app, /Continue with Google/);
 });
 

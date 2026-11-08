@@ -190,3 +190,15 @@ test('client confirmation and My bookings show the bike count, not bike numbers'
   assert.match(c, /'<dt>Bikes<\/dt><dd>' \+ b\.bikeIds\.length \+ '<\/dd>'/);
   assert.match(read('js/admin.js'), /b\.bikeIds\.map\(Data\.bikeLabel\)/, 'admin still sees bike numbers');
 });
+
+test('booking step 1 asks only business / company name, email and phone (client, Nov 8 2026)', () => {
+  const c = read('js/client.js');
+  const i = c.indexOf('function renderDetails'), j = c.indexOf('function renderDates');
+  const step1 = c.slice(i, j);
+  for (const s of ['Business / company name', 'Email address', 'Phone number']) assert.ok(step1.includes(s), s);
+  for (const s of ['Where should the bikes ride?', 'Streets or blocks you want', 'What the ad says', 'name="area"', 'name="areaNote"', 'name="adText"', 'Contact name']) assert.ok(!step1.includes(s), 'removed: ' + s);
+  assert.strictEqual((step1.match(/<input /g) || []).length, 3, 'exactly three inputs');
+  assert.ok(!step1.includes('Please pick where the bikes should ride'), 'no area validation');
+  // confirmation shows the Area row only for old bookings that have one
+  assert.ok(c.includes("(b.areaName || b.areaNote ? '<dt>Area</dt>"));
+});
