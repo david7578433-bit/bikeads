@@ -236,11 +236,11 @@
       const jd = J ? J.day(ds) : null;
       const ev = jd && jd.events[0];
       const cls = ['cal-cell', ds === t ? 'today' : '', dis ? 'disabled' : '', inRange ? 'in-range' : '', ds === o.rangeStart ? 'range-start' : '', ds === o.rangeEnd ? 'range-end' : '', ds < t ? 'past' : '',
-        jd && jd.shabbos ? 'shab' : '', ev && (ev.kind === 'yt' || ev.kind === 'fest') ? 'k-' + ev.kind + '-day' : ''].join(' ');
+        jd && jd.shabbos ? 'shab' : '', o.labels !== false && ev && (ev.kind === 'yt' || ev.kind === 'fest') ? 'k-' + ev.kind + '-day' : ''].join(' ');
       let title = '';
       if (jd) title = jd.heFull + ' · ' + jd.enHeb + (jd.shabbos ? ' · Shabbos' + (jd.parsha ? ' ' + jd.parsha.en.replace(/^Parshas /, '') : '') : '') + jd.events.map((e) => ' · ' + e.en).join('');
       const hd = jd ? '<span class="cal-hd" lang="he">' + esc(jd.heDay) + ((jd.hebDayNum === 1 || d === 1) ? ' <span class="hm">' + esc(jd.heMonth) + '</span>' : '') + '</span>' : '';
-      const hol = ev ? '<span class="cal-hol k-' + ev.kind + '">' + esc(ev.en) + '</span>' : '';
+      const hol = ev && o.labels !== false ? '<span class="cal-hol k-' + ev.kind + '">' + esc(ev.en) + '</span>' : ''; /* o.labels false = clean (client booking, Nov 8 2026) */
       html += '<div class="' + cls + '" role="gridcell" data-date="' + ds + '"' + (title ? ' title="' + esc(title) + '" aria-label="' + esc(MONTHS[month] + ' ' + d + ', ' + title) + '"' : '') + (dis ? ' aria-disabled="true"' : ' tabindex="0"') + '><span class="cal-top"><span class="cal-num">' + d + '</span>' + hd + '</span>' + (o.cell ? o.cell(ds) : '') + hol + '</div>';
     }
     html += '</div>';

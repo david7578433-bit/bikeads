@@ -7,12 +7,14 @@ const vm = require('node:vm');
 const site = fs.existsSync(path.join(__dirname, '..', 'site')) ? path.join(__dirname, '..', 'site') : path.join(__dirname, '..', 'docs');
 const read = (p) => fs.readFileSync(path.join(site, p), 'utf8');
 const Core = require(path.join(site, 'js', 'deliver-core.js'));
+const Fixture = require('./fixtures/demo-data.js'); // the old demo set, for logic tests only (the site no longer seeds it)
 
 async function world() {
   const store = {};
   const ctx = vm.createContext({ localStorage: { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } }, console, Date, Math, JSON, setTimeout, clearTimeout, setInterval, clearInterval, Promise });
   ctx.window = ctx;
   for (const f of ['js/deliver-core.js', 'js/deliver-seed.js', 'js/data.js', 'js/deliver.js']) vm.runInContext(read(f), ctx, { filename: f });
+  Fixture.use(ctx);
   await ctx.Data.init();
   return ctx;
 }
@@ -22,7 +24,8 @@ test('the four plugins are wired into the page and the login', () => {
   for (const f of ['js/deliver-core.js', 'js/deliver-seed.js', 'js/deliver.js', 'js/deliver-ui.js', 'js/driver.js', 'js/store.js', 'js/boss.js', 'js/platform.js', 'vendor/qrcode/qrcode.js']) assert.ok(html.includes(f), f);
   assert.match(html, /manifest\.webmanifest/);
   const app = read('js/app.js');
-  for (const s of ['driver@bikeads.demo', 'store@bikeads.demo', 'boss@bikeads.demo', 'admin@bikeads.demo', 'client@bikeads.demo', 'viewAs', 'serviceWorker']) assert.ok(app.includes(s), s);
+  for (const s of ['viewAs', 'serviceWorker', 'DELIVER_ROLES']) assert.ok(app.includes(s), s);
+  assert.ok(!/@bikeads\.demo/.test(app), 'no demo logins on the login page (Nov 8 2026)');
   assert.ok(read('js/platform.js').includes('BikeAds Deliver')); // v4: the delivery side keeps its own name, behind FEATURES.delivery
   assert.ok(fs.existsSync(path.join(site, 'sw.js')) && fs.existsSync(path.join(site, 'icons/icon-512.png')) && fs.existsSync(path.join(site, 'vendor/jsqr/jsQR.js')) && fs.existsSync(path.join(site, 'vendor/xlsx/xlsx.mini.min.js')));
   const man = JSON.parse(read('manifest.webmanifest'));
@@ -34,7 +37,7 @@ test('the four plugins are wired into the page and the login', () => {
   assert.match(read('js/platform.js'), /Connect later/);
 });
 
-test('seed: v1 data kept, plus 2 stores, 3 drivers, 25 orders today with logins', async () => {
+test('demo fixture (tests only): 2 stores, 3 drivers, 25 orders today with logins', async () => {
   const w = await world();
   const D = w.Data;
   assert.strictEqual(D.list('bikes').length, 12);
@@ -48,19 +51,21 @@ test('seed: v1 data kept, plus 2 stores, 3 drivers, 25 orders today with logins'
   assert.ok(D.list('orders').some((o) => o.status === 'delivered' && o.proof && o.proof.signature));
 });
 
-test('an old v1 browser gets the delivery data added without losing anything', async () => {
+test('an old browser keeps its data; delivery settings are added, but no demo stores/drivers/orders (Nov 8 2026)', async () => {
   const store = {};
   const ctx = vm.createContext({ localStorage: { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } }, console, Date, Math, JSON });
   ctx.window = ctx;
-  vm.runInContext(read('js/data.js'), ctx);           // v1 only: no delivery seed loaded
+  vm.runInContext(read('js/data.js'), ctx);           // bike ads only: no delivery seed loaded
   await ctx.Data.init();
-  ctx.Data.put('bikes', { id: 'bike_01', notes: 'kept' });
+  ctx.Data.put('bikes', { id: 'bike_01', number: '01', notes: 'kept' });
+  await ctx.Data.flush('all');
   const ctx2 = vm.createContext({ localStorage: ctx.localStorage, console, Date, Math, JSON });
   ctx2.window = ctx2;
   for (const f of ['js/deliver-core.js', 'js/deliver-seed.js', 'js/data.js']) vm.runInContext(read(f), ctx2);
   await ctx2.Data.init();
   assert.strictEqual(ctx2.Data.get('bikes', 'bike_01').notes, 'kept');
-  assert.strictEqual(ctx2.Data.list('stores').length, 2);
+  assert.ok(ctx2.Data.settings().deliver && ctx2.Data.settings().deliver.pricePerDelivery > 0, 'delivery settings added');
+  for (const c of ['stores', 'drivers', 'orders', 'users']) assert.strictEqual(ctx2.Data.list(c).length, 0, 'no demo ' + c);
 });
 
 test('build routes: every stop assigned, areas kept apart, 2-opt never longer', async () => {
@@ -131,17 +136,14 @@ test('store upload: CSV and pasted Excel rows become orders', () => {
   assert.strictEqual(Core.fill('Hi {customer}, ETA {eta}', { customer: 'M.', eta: '3:40 PM' }), 'Hi M., ETA 3:40 PM');
 });
 
-test('next day: untouched sample orders roll over to 25 fresh ones for today', async () => {
+test('next day: DeliverSeed.rollDay still rolls untouched demo orders over (fixture only; the site no longer runs it)', async () => {
   const w = await world();
   const D = w.Data, y = D.addDays(D.today(), -1);
-  D.list('orders').filter((o) => o.date === D.today()).forEach((o) => D.put('orders', { id: o.id, date: y }));
-  D.saveSettings({ deliver: Object.assign({}, D.settings().deliver, { demoDay: y }) });
-  await D.flush('all');
-  const ctx2 = vm.createContext({ localStorage: w.localStorage, console, Date, Math, JSON, setTimeout, clearTimeout, setInterval, clearInterval, Promise });
-  ctx2.window = ctx2;
-  for (const f of ['js/deliver-core.js', 'js/deliver-seed.js', 'js/data.js']) vm.runInContext(read(f), ctx2);
-  await ctx2.Data.init();
-  assert.strictEqual(ctx2.Data.list('orders').filter((o) => o.date === ctx2.Data.today()).length, 25);
-  assert.strictEqual(ctx2.Data.list('orders').filter((o) => o.date === y && o.status === 'new').length, 0);
-  assert.ok(ctx2.Data.list('orders').some((o) => o.status === 'delivered'), 'history kept');
+  const st = Fixture.build(w);
+  st.orders.filter((o) => o.date === D.today()).forEach((o) => { o.date = y; });
+  st.settings.deliver.demoDay = y;
+  assert.ok(w.DeliverSeed.rollDay(st, { uid: D.uid, iso: D.iso, addDays: D.addDays, today: D.today }));
+  assert.strictEqual(st.orders.filter((o) => o.date === D.today()).length, 25);
+  assert.strictEqual(st.orders.filter((o) => o.date === y && o.status === 'new').length, 0);
+  assert.ok(st.orders.some((o) => o.status === 'delivered'), 'history kept');
 });

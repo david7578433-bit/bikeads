@@ -23,7 +23,8 @@ test('v4 main page is an open one-pager with every section, samples marked', () 
     'Book bikes', 'See prices', 'statsSample', 'reviewsSample', 'storySample', 'sample-tag', 'Main page content', 'setupFeePerBike', 'weeklyPerBike', 'hero-ride', 'dock']) assert.ok(home.includes(s), s);
   const app = read('js/app.js');
   assert.match(app, /HomePage\.render\(app, null\)/, 'logged-out visitors land on the main page, not a login wall');
-  for (const s of ['loginform', 'Demo logins', 'admin@bikeads.demo|admin123', 'client@bikeads.demo|client123', 'driver@bikeads.demo', 'store@bikeads.demo', 'boss@bikeads.demo', 'Create a client account', 'renderSignup']) assert.ok(app.includes(s), s);
+  for (const s of ['Demo logins', 'admin@bikeads.demo', 'client@bikeads.demo', 'driver@bikeads.demo', 'store@bikeads.demo', 'boss@bikeads.demo']) assert.ok(!app.includes(s), 'removed Nov 8 2026: ' + s);
+  for (const s of ['loginform', 'Create a client account', 'renderSignup']) assert.ok(app.includes(s), s);
   assert.match(read('js/admin.js'), /HomePage\.renderAdmin/); assert.match(read('js/admin.js'), /HomeVideo\.renderAdmin/);
   assert.match(read('js/bikeride.js'), /opts\.bg/);
 });
@@ -53,7 +54,7 @@ test('delivery business is saved but OFF behind FEATURES.delivery', () => {
   const app = read('js/app.js');
   assert.match(app, /const DELIVERY = !!\(window\.FEATURES && window\.FEATURES\.delivery\)/);
   assert.match(app, /!DELIVERY && DELIVER_ROLES\.includes\(role\)/);
-  assert.match(app, /DELIVERY \? '<p class="demo-group">/);
+  assert.match(app, /DELIVERY \? ' — and deliveries for local stores\.'/);
   assert.ok(!/driver|dispatch|deliver(?!y bikes|ing groceries| groceries)/i.test(read('js/home.js').replace(/grocery-delivery/gi, '').replace(/\/\*[\s\S]*?\*\//g, '')), 'main page has no delivery-business words');
 });
 

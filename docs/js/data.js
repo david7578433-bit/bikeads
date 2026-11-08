@@ -1,15 +1,18 @@
-/* BikeAds data layer.
- * Every read and write in the app goes through `Data`. v1 keeps everything in this
- * browser (localStorage) via LocalAdapter, so the demo works with no server.
- * To share data between devices, write a RemoteAdapter with the same three methods
- * (loadAll, saveCollection, clearAll) that talks to a real database/API, and pass it
- * to Data.init(). Nothing else in the app has to change.
+/* Media on Wheels data layer (repo: bikeads).
+ * Every read and write in the app goes through `Data`. Two adapters with the same three methods
+ * (loadAll, saveCollection, clearAll):
+ *  - LocalAdapter (below): this browser only (localStorage). Used while the Supabase keys in js/config.js are empty.
+ *  - Auth.adapter (js/auth.js): the shared Supabase database (tables mow_*, supabase/schema.sql), used once the keys are set.
+ * Production start (Nov 8 2026, David: "take down all test members"): NO demo members, logins, bookings,
+ * transactions, stores or drivers are seeded any more. A new database / device starts empty except the two
+ * service areas and the settings (real prices: 150 dollars printing & setup per bike, 75 dollars per bike per week).
  */
 (function () {
   'use strict';
 
-  const STORAGE_KEY = 'bikeads.v1';
+  const STORAGE_KEY = 'mow.prod.v2'; /* was 'bikeads.v1' (demo data, left untouched in old browsers, no longer read) */
   const COLLECTIONS = ['users', 'locations', 'bikes', 'bookings', 'transactions', 'reconciliations',
+    /* Nov 8 2026: price discounts (admin price table) */ 'discounts',
     /* BikeAds Deliver plugin */ 'stores', 'drivers', 'orders', 'smslog', 'shifts', 'invoices', 'payouts'];
 
   const LocalAdapter = {
@@ -34,8 +37,11 @@
   };
   */
 
-  /* v3: client checkout prices. SAMPLE numbers until David sets the real ones (Admin → Settings). */
-  const SAMPLE_PRICES = { setupFeePerBike: 75, weeklyPerBike: 150 };
+  /* Client checkout prices. REAL prices since Nov 8 2026 (client, via David): printing & setup 150 dollars per bike one time,
+   * 75 dollars per bike per week (they were swapped sample numbers before). Admin → Settings changes them.
+   * (Name SAMPLE_PRICES kept for older code.) Example: 5 bikes x 1 week = 750 + 375 = 1,125. */
+  const PRICES = { setupFeePerBike: 150, weeklyPerBike: 75 };
+  const SAMPLE_PRICES = PRICES;
 
   const uid = (p) => (p || 'id') + '_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
   const pad = (n) => String(n).padStart(2, '0');
@@ -43,101 +49,44 @@
   const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
   const today = () => iso(new Date());
 
-  function seed() {
-    const t = today();
-    const locations = [
+  /* Settings every new database / device starts with. Prices are SAMPLE numbers until David sets real ones. */
+  function defaultSettings() {
+    return { businessName: 'Media on Wheels', pricePerBikeDay: 25, depositPct: 20, openingBalance: 0, seededAt: new Date().toISOString(), version: 1,
+      setupFeePerBike: PRICES.setupFeePerBike, weeklyPerBike: PRICES.weeklyPerBike, pricesAreSamples: false, minBikes: 5 };
+  }
+  /* The two service areas (Williamsburg and Boro Park). No members, bikes, bookings or money records: those are real data
+   * the admin and the clients add. (The old demo set with fake clients/drivers/stores was removed on Nov 8 2026.) */
+  function defaultLocations() {
+    return [
       { id: 'loc_wburg', name: 'Williamsburg', lat: 40.7081, lng: -73.9571, zoom: 15 },
-      { id: 'loc_monroe', name: 'Monroe / KJ', lat: 41.3410, lng: -74.1690, zoom: 15 },
-      { id: 'loc_bpark', name: 'Borough Park', lat: 40.6337, lng: -73.9965, zoom: 15 },
-      { id: 'loc_lakewood', name: 'Lakewood', lat: 40.0821, lng: -74.2097, zoom: 15 },
-      { id: 'loc_monsey', name: 'Monsey', lat: 41.1112, lng: -74.0685, zoom: 15 }
+      { id: 'loc_bpark', name: 'Borough Park', lat: 40.6337, lng: -73.9965, zoom: 15 }
     ];
-    const advertisers = ['Fresh Basket Grocery', 'QuickMove Movers', 'Bright Smile Dental'];
-    const marketers = ['Hudson Media Group', 'Brooklyn Ad Works', 'Hudson Media Group'];
-    const users = [
-      { id: 'u_admin', role: 'admin', name: 'David Klar', company: 'Media on Wheels', email: 'admin@bikeads.demo', password: 'admin123' },
-      { id: 'u_c1', role: 'client', name: 'Moshe Weiss', company: advertisers[0], email: 'client@bikeads.demo', password: 'client123', phone: '' },
-      { id: 'u_c2', role: 'client', name: 'Shmuel Green', company: advertisers[1], email: 'sara@quickmove.demo', password: 'client123', phone: '' },
-      { id: 'u_c3', role: 'client', name: 'Yossi Katz', company: advertisers[2], email: 'yossi@brightsmile.demo', password: 'client123', phone: '' }
-    ];
-    // 12 bikes: 4 Williamsburg, 4 Monroe/KJ, 2 Borough Park, 1 Lakewood, 1 Monsey
-    const plan = ['loc_wburg', 'loc_wburg', 'loc_wburg', 'loc_wburg', 'loc_monroe', 'loc_monroe', 'loc_monroe', 'loc_monroe', 'loc_bpark', 'loc_bpark', 'loc_lakewood', 'loc_monsey'];
-    const bikes = plan.map((locId, i) => {
-      const loc = locations.find((l) => l.id === locId);
-      const a = i % 3;
-      const ang = (i * 137) * Math.PI / 180, r = 0.0025 + (i % 4) * 0.0012;
-      return {
-        id: 'bike_' + pad(i + 1),
-        number: String(i + 1).padStart(2, '0'),
-        trackerId: '864512040' + String(318200 + i * 37),
-        locationId: locId,
-        advertiser: advertisers[a],
-        marketing: marketers[a],
-        notes: '',
-        position: { lat: loc.lat + Math.sin(ang) * r, lng: loc.lng + Math.cos(ang) * r * 1.3, at: new Date().toISOString(), source: 'sim' }
-      };
-    });
-    const price = 25;
-    const mk = (id, client, start, days, bikeIds, status, mode) => {
-      const end = addDays(start, days - 1);
-      const total = bikeIds.length * days * price;
-      const by = users.find((u) => u.id === client);
-      return {
-        id, clientId: client, clientName: by.name, company: by.company,
-        start, end, bikeIds, mode: mode || 'specific', pricePerDay: price,
-        total, deposit: Math.round(total * 0.2 * 100) / 100, depositPaid: true,
-        status, notes: '', createdAt: new Date(start + 'T09:00:00').toISOString(),
-        history: [{ at: new Date(start + 'T09:00:00').toISOString(), by: by.name, action: 'Requested' }]
-          .concat(status === 'pending' ? [] : [{ at: new Date(start + 'T11:00:00').toISOString(), by: 'David Klar', action: status === 'declined' ? 'Declined' : 'Approved' }])
-      };
-    };
-    const bookings = [
-      mk('bk_1001', 'u_c1', addDays(t, -40), 14, ['bike_01', 'bike_02', 'bike_03', 'bike_04'], 'completed'),
-      mk('bk_1002', 'u_c2', addDays(t, -20), 10, ['bike_05', 'bike_06'], 'completed'),
-      mk('bk_1003', 'u_c3', addDays(t, -3), 7, ['bike_09', 'bike_10'], 'approved'),
-      mk('bk_1004', 'u_c1', addDays(t, 2), 5, ['bike_01', 'bike_02', 'bike_03', 'bike_04', 'bike_05'], 'approved', 'any5'),
-      mk('bk_1005', 'u_c2', addDays(t, 6), 7, ['bike_05', 'bike_06', 'bike_07', 'bike_08'], 'pending'),
-      mk('bk_1006', 'u_c3', addDays(t, 12), 3, ['bike_11', 'bike_12'], 'pending')
-    ];
-    bookings[1].history.push({ at: new Date(addDays(t, -10) + 'T12:00:00').toISOString(), by: 'system', action: 'Completed' });
-    bookings[0].history.push({ at: new Date(addDays(t, -26) + 'T12:00:00').toISOString(), by: 'system', action: 'Completed' });
-    const tx = (date, description, amount, category, bookingId, reconciled) => ({ id: uid('tx'), date, description, amount, category, bookingId: bookingId || '', reconciled: !!reconciled, createdAt: new Date().toISOString() });
-    const transactions = [
-      tx(addDays(t, -45), 'Opening deposit', 5000, 'Owner investment', '', true),
-      tx(addDays(t, -42), 'GPS trackers x12', -660, 'Equipment', '', true),
-      tx(addDays(t, -41), 'Deposit 20% - Fresh Basket Grocery', 280, 'Booking deposit', 'bk_1001', true),
-      tx(addDays(t, -38), 'Bike ad frames and printing', -540, 'Printing', '', true),
-      tx(addDays(t, -27), 'Balance - Fresh Basket Grocery', 1120, 'Booking payment', 'bk_1001', true),
-      tx(addDays(t, -21), 'Deposit 20% - QuickMove Movers', 100, 'Booking deposit', 'bk_1002', true),
-      tx(addDays(t, -15), 'Tracker data plans (monthly)', -96, 'Subscriptions', '', true),
-      tx(addDays(t, -9), 'Balance - QuickMove Movers', 400, 'Booking payment', 'bk_1002', false),
-      tx(addDays(t, -4), 'Deposit 20% - Bright Smile Dental', 70, 'Booking deposit', 'bk_1003', false),
-      tx(addDays(t, -2), 'Bike repair - flat tires', -45, 'Maintenance', '', false),
-      tx(addDays(t, -1), 'Deposit 20% - Fresh Basket Grocery', 125, 'Booking deposit', 'bk_1004', false)
-    ];
-    const base = {
-      users, locations, bikes, bookings, transactions, reconciliations: [],
-      settings: { businessName: 'Media on Wheels', pricePerBikeDay: price, depositPct: 20, openingBalance: 0, seededAt: new Date().toISOString(), version: 1, setupFeePerBike: SAMPLE_PRICES.setupFeePerBike, weeklyPerBike: SAMPLE_PRICES.weeklyPerBike, pricesAreSamples: true }
-    };
+  }
+  function seed() {
+    const base = { users: [], locations: defaultLocations(), bikes: [], bookings: [], transactions: [], reconciliations: [], settings: defaultSettings(), discounts: [] };
     addDeliver(base);
     return base;
   }
 
-  /* BikeAds Deliver: add its demo data (stores, drivers, orders...) next to the bike-ad data.
-   * Also runs once for a browser that already has v1 data, so nothing there is lost. */
+  /* BikeAds Deliver (behind FEATURES.delivery): add only its settings and empty lists — no demo stores, drivers,
+   * orders or logins any more (DeliverSeed.addTo with the old demo set is still in the code, unused). */
   function addDeliver(st) {
     const DS = (typeof window !== 'undefined' && window.DeliverSeed) || null;
-    if (!DS || (st.settings && st.settings.deliver)) return false;
-    DS.addTo(st, { uid, iso, addDays, today });
+    if (!DS || !st.settings || st.settings.deliver) return false;
+    DS.addSettings(st, { uid, iso, addDays, today });
     return true;
   }
 
   let state = null;
+  let newDatabase = false;
   let adapter = LocalAdapter;
   const listeners = new Set();
 
   async function persist(name) {
-    try { await adapter.saveCollection(name, state); } catch (e) { console.error('save failed', e); if (typeof window !== 'undefined' && window.UI && window.UI.toast) window.UI.toast('Could not save: this device\'s storage is full.'); }
+    try { await adapter.saveCollection(name, state); } catch (e) {
+      console.error('save failed', e);
+      if (typeof window !== 'undefined' && window.UI && window.UI.toast) window.UI.toast(adapter === LocalAdapter ? 'Could not save: this device\'s storage is full.' : 'Could not save to the database: ' + ((e && e.message) || 'no connection') + '. Please try again.');
+    }
     listeners.forEach((fn) => { try { fn(name); } catch (e) { console.error(e); } });
   }
 
@@ -146,25 +95,31 @@
     async init(customAdapter) {
       if (customAdapter) adapter = customAdapter;
       state = await adapter.loadAll();
-      if (!state || !state.settings || state.settings.version !== 1) { state = seed(); await persist('all'); }
+      newDatabase = false;
+      const fresh = !state || !state.settings || state.settings.version !== 1;
+      if (fresh && adapter === LocalAdapter) { state = seed(); await persist('all'); }
+      else if (fresh) { /* database: fill what the database does not have yet, in memory (the admin's first sign-in stores it) */
+        newDatabase = true;
+        state = state || {}; state.settings = Object.assign(defaultSettings(), state.settings || {}, { version: 1 });
+        if (!Array.isArray(state.locations) || !state.locations.length) state.locations = defaultLocations();
+      }
       COLLECTIONS.forEach((c) => { if (!Array.isArray(state[c])) state[c] = []; });
       if (state.settings.setupFeePerBike == null || state.settings.weeklyPerBike == null) {
         state.settings.setupFeePerBike = state.settings.setupFeePerBike == null ? SAMPLE_PRICES.setupFeePerBike : state.settings.setupFeePerBike;
         state.settings.weeklyPerBike = state.settings.weeklyPerBike == null ? SAMPLE_PRICES.weeklyPerBike : state.settings.weeklyPerBike;
-        if (state.settings.pricesAreSamples == null) state.settings.pricesAreSamples = true;
-        await persist('settings');
+        if (state.settings.pricesAreSamples == null) state.settings.pricesAreSamples = false;
+        if (adapter === LocalAdapter) await persist('settings');
       }
-      /* v4 (Nov 4 2026): the brand is "Media on Wheels" (repo/URL keep the old name). */
-      if (!state.settings.businessName || state.settings.businessName === 'BikeAds') {
-        state.settings.businessName = 'Media on Wheels';
-        const a = state.users.find((u) => u.id === 'u_admin'); if (a && a.company === 'BikeAds') a.company = 'Media on Wheels';
-        await persist('all');
-      }
-      if (addDeliver(state)) await persist('all');
-      else if (typeof window !== 'undefined' && window.DeliverSeed && window.DeliverSeed.rollDay(state, { uid, iso, addDays, today })) await persist('all');
+      if (!state.settings.businessName || state.settings.businessName === 'BikeAds') state.settings.businessName = 'Media on Wheels';
+      if (addDeliver(state) && adapter === LocalAdapter) await persist('all');
       return Data;
     },
-    async reset() { await adapter.clearAll(); state = seed(); await persist('all'); },
+    /* Which store is in use: 'database' (shared Supabase) or 'device' (this browser only). */
+    mode() { return adapter === LocalAdapter ? 'device' : 'database'; },
+    /* Database mode: the admin's first sign-in on an empty database stores the starting settings and service areas. */
+    async saveStartIfNew() { if (!newDatabase || adapter === LocalAdapter) return false; newDatabase = false; await adapter.saveCollection('all', state); return true; },
+    /* This-device mode only: clear this browser's copy back to the empty production start. */
+    async reset() { if (adapter !== LocalAdapter) return; await adapter.clearAll(); state = seed(); await persist('all'); },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     settings() { return state.settings; },
     saveSettings(patch) { Object.assign(state.settings, patch); return persist('settings'); },
@@ -204,13 +159,45 @@
     },
     /* v3 checkout: printing & setup (one time, per bike) + weekly charge (per bike per week). */
     weeks(start, end) { return Math.max(1, Math.ceil(Data.days(start, end) / 7)); },
-    priceQuote(nBikes, start, end) {
+    /* Checkout price (Nov 8 2026): printing & setup (one time, per bike) + weekly charge (per bike per week),
+     * minus discounts from the admin price table (Admin → Settings → Prices & discounts), then the deposit due now
+     * (settings.depositPct, default 20%) and the balance due later.
+     * Discount rules (collection 'discounts'): { kind: 'bikes'|'weeks'|'promo'|'client', min, code, clientId, clientEmail, pct, label, active }.
+     * For each kind the best matching rule counts; the percents add up (capped at 90%) and apply to the subtotal.
+     * opts: { promo: rule already checked (from Data.findPromo or the database), client: { id, email } } */
+    priceQuote(nBikes, start, end, opts) {
+      opts = opts || {};
       const s = state.settings, n = Math.max(0, nBikes | 0);
       const days = Data.days(start, end), weeks = Data.weeks(start, end);
       const setupEach = +s.setupFeePerBike || 0, weeklyEach = +s.weeklyPerBike || 0;
       const r2 = (x) => Math.round(x * 100) / 100;
-      const setup = r2(n * setupEach), weekly = r2(n * weeklyEach * weeks);
-      return { bikes: n, days, weeks, setupEach, weeklyEach, setup, weeklyPerWeek: r2(n * weeklyEach), weekly, total: r2(setup + weekly), samples: !!s.pricesAreSamples };
+      const setup = r2(n * setupEach), weekly = r2(n * weeklyEach * weeks), subtotal = r2(setup + weekly);
+      const rules = (state.discounts || []).filter((r) => r && r.active !== false && +r.pct > 0);
+      const best = (list) => list.sort((a, b) => (+b.pct) - (+a.pct))[0] || null;
+      const cl = opts.client || {};
+      const picks = [
+        best(rules.filter((r) => r.kind === 'bikes' && n >= (+r.min || 0))),
+        best(rules.filter((r) => r.kind === 'weeks' && weeks >= (+r.min || 0))),
+        best(rules.filter((r) => r.kind === 'client' && ((cl.id && r.clientId === cl.id) || (cl.email && r.clientEmail && r.clientEmail.toLowerCase() === String(cl.email).toLowerCase())))),
+        opts.promo && opts.promo.active !== false && +opts.promo.pct > 0 ? opts.promo : null
+      ].filter(Boolean);
+      let pctSum = 0;
+      const discounts = picks.map((r) => {
+        const pct = Math.max(0, Math.min(90 - pctSum, +r.pct)); pctSum += pct;
+        const label = r.label || (r.kind === 'bikes' ? (+r.min) + '+ bikes' : r.kind === 'weeks' ? (+r.min) + '+ weeks' : r.kind === 'promo' ? 'Promo code ' + (r.code || '') : 'Your client discount');
+        return { id: r.id, kind: r.kind, label, pct, amount: r2(subtotal * pct / 100) };
+      }).filter((x) => x.pct > 0);
+      const discount = r2(discounts.reduce((a, x) => a + x.amount, 0));
+      const total = r2(subtotal - discount);
+      const depositPct = Math.max(0, Math.min(100, s.depositPct == null ? 20 : +s.depositPct));
+      const deposit = r2(total * depositPct / 100);
+      return { bikes: n, days, weeks, setupEach, weeklyEach, setup, weeklyPerWeek: r2(n * weeklyEach), weekly, subtotal, discounts, discount, total,
+        depositPct, deposit, balance: r2(total - deposit), samples: !!s.pricesAreSamples };
+    },
+    /* This-device mode: find an active promo code rule (in database mode the database checks codes: Auth.checkPromo). */
+    findPromo(code) {
+      const c = String(code || '').trim().toLowerCase(); if (!c) return null;
+      return (state.discounts || []).find((r) => r.kind === 'promo' && r.active !== false && String(r.code || '').trim().toLowerCase() === c) || null;
     },
     SAMPLE_PRICES,
     bike(id) { return Data.get('bikes', id); },
@@ -219,4 +206,5 @@
 
   window.Data = Data;
   window.BikeAdsSeed = seed;
+  window.DataLocalAdapter = LocalAdapter;
 })();

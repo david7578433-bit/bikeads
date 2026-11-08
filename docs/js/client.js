@@ -6,7 +6,15 @@
   const { esc, money, fmtDate, fmtRange, $, $$, toast, confirmBox, statusOf, badge, calendarHtml } = UI;
 
   let ride = null;
-  const blank = () => ({ step: 'details', start: null, end: null, count: 3, bikeIds: [], specific: false, mode: 'count', area: '', areaNote: '', biz: null, lastId: null });
+  /* Nov 8 2026 (client, via David): a booking is at least 5 bikes. Admin can change it in settings.minBikes; the admin's own booking editor has no minimum. */
+  const MIN_BIKES = () => Math.max(1, Math.round(+((window.Data && Data.settings && Data.settings().minBikes) || 5)));
+  const clampCount = (n, freeN) => Math.max(MIN_BIKES(), Math.min(Math.max(freeN, MIN_BIKES()), n || MIN_BIKES()));
+  /* Nov 8 2026: discounts (admin price table) + promo code for this booking */
+  let me = null;
+  const quoteOpts = () => ({ promo: wiz.promo || null, client: me ? { id: me.id, email: me.email } : null });
+  const quote = () => Data.priceQuote(wiz.count, wiz.start, wiz.end, quoteOpts());
+  const minNote = () => '<p class="small muted min-note">Minimum ' + MIN_BIKES() + ' bikes</p>';
+  const blank = () => ({ step: 'details', start: null, end: null, count: 5, promo: null, bikeIds: [], specific: false, mode: 'count', area: '', areaNote: '', biz: null, lastId: null });
   const wiz = Object.assign(blank(), { calY: null, calM: null });
   function resetWiz() { const y = wiz.calY, m = wiz.calM; Object.assign(wiz, blank(), { calY: y, calM: m }); }
   function teardown() { if (ride) { ride.destroy(); ride = null; } }
@@ -39,7 +47,7 @@
 
   /* ================= BOOK ================= */
   function renderBook(root, user) {
-    teardown();
+    teardown(); me = user;
     if (wiz.step === 'dates' || wiz.step === 'start' || wiz.step === 'end') return renderDates(root, user);
     if (wiz.step === 'price') return renderPrice(root, user);
     if (wiz.step === 'pay') return renderPay(root, user);
@@ -65,7 +73,8 @@
       '<label>What the ad says (optional)<textarea class="input" name="adText" rows="2" placeholder="e.g. Fresh Basket — open Motzei Shabbos till 1am">' + esc(b.adText) + '</textarea></label>' +
       '<p class="err" id="det-err" role="alert"></p>' +
       '<div class="flow-actions"><span class="small muted">Step 1 of 4</span><button class="btn primary big" type="submit">Next: dates & bikes ›</button></div></form>' +
-      rideCard('Your ad riding in Williamsburg') + '</section>';
+      /* Nov 8 2026: the client asked to take the "Your ad riding in Williamsburg" preview off this step (rideCard kept in the code) */
+      '</section>';
     const f = $('#det', root);
     const save = () => {
       Object.assign(b, { company: f.company.value.trim(), contact: f.contact.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim(), adText: f.adText.value.trim() });
@@ -79,7 +88,6 @@
       if (!wiz.area && !wiz.areaNote) { err.textContent = 'Please pick where the bikes should ride.'; return; }
       go('dates');
     });
-    mountRide(root);
   }
 
   /* ---- step 2: dates (English + Hebrew calendar) + number of bikes ---- */
@@ -90,10 +98,12 @@
     const free = freeFor();
     const fleet = Data.list('bikes').length;
     if (wiz.specific) wiz.count = wiz.bikeIds.length;
-    if (!wiz.specific) wiz.count = Math.max(1, Math.min(wiz.count || 1, free.length || 1));
+    if (!wiz.specific) wiz.count = clampCount(wiz.count, free.length);
     const J = window.JCal && JCal.ready ? JCal : null;
     const heOf = (ds) => (J ? ' <span class="he" lang="he">' + esc(J.day(ds).heFull) + '</span>' : '');
-    const banner = !wiz.start ? '<strong>Tap the first day.</strong> Each day shows how many bikes are free, with the Hebrew date and Yom Tov.' :
+    /* Nov 8 2026 (client): clean calendar — free bikes + small Hebrew date, no holiday labels or holiday list; Shabbos blocked. */
+    const isShabbos = (ds) => (J ? !!J.day(ds).shabbos : new Date(ds + 'T12:00:00').getDay() === 6);
+    const banner = !wiz.start ? '<strong>Tap the first day.</strong> Each day shows how many bikes are free. The bikes do not ride on Shabbos.' :
       picking ? '<strong>Now tap the last day.</strong> Starting ' + esc(fmtDate(wiz.start)) + '.<div class="quick"><button type="button" class="chip" data-q="6">1 week</button><button type="button" class="chip" data-q="13">2 weeks</button><button type="button" class="chip" data-q="27">4 weeks</button></div>' :
       '<strong>Dates picked.</strong> Tap a day to start over.';
     let sel = '';
@@ -108,24 +118,26 @@
     root.innerHTML = '<section class="page"><div class="page-head"><button class="back" id="back">‹ Details</button><h1>Dates & bikes</h1></div>' + steps4(2) +
       '<div class="pick-banner ' + (picking ? 'end' : '') + '">' + banner + '</div>' +
       '<div class="card cal-card">' + calendarHtml(wiz.calY, wiz.calM, {
-        isDisabled: (ds) => ds < Data.today() || (picking && ds < wiz.start),
-        rangeStart: wiz.start, rangeEnd: wiz.end || wiz.start,
+        isDisabled: (ds) => ds < Data.today() || (picking && ds < wiz.start) || isShabbos(ds),
+        rangeStart: wiz.start, rangeEnd: wiz.end || wiz.start, holidays: false, labels: false,
         cell: (ds) => {
-          if (ds < Data.today()) return '';
+          if (ds < Data.today() || isShabbos(ds)) return '';
           const n = Data.freeBikes(ds, ds).length;
           return '<span class="free ' + (n === 0 ? 'none' : n < 5 ? 'low' : '') + '">' + (n === 0 ? 'full' : '<b>' + n + '</b><i> free</i>') + '</span>';
         }
       }) + '</div>' +
       '<section class="card"><h2>How many bikes?</h2>' + sel +
       '<div class="bike-row" style="margin-top:.7rem"><div><strong>' + (wiz.specific ? 'Bikes you picked' : 'Number of bikes') + '</strong><div class="small muted">' + (wiz.start && wiz.end ? free.length + ' of ' + fleet + ' bikes free for these dates' : fleet + ' bikes in the fleet · pick dates to see what is free') + '</div></div>' +
-      '<div class="stepper" role="group" aria-label="Number of bikes"><button type="button" id="minus" aria-label="One bike less"' + (wiz.count <= 1 || wiz.specific ? ' disabled' : '') + '>−</button><output id="cnt" aria-live="polite">' + wiz.count + '</output><button type="button" id="plus" aria-label="One bike more"' + (wiz.count >= free.length || wiz.specific ? ' disabled' : '') + '>+</button></div></div>' +
+      '<div class="stepper" role="group" aria-label="Number of bikes"><button type="button" id="minus" aria-label="One bike less"' + (wiz.count <= MIN_BIKES() || wiz.specific ? ' disabled' : '') + '>−</button><output id="cnt" aria-live="polite">' + wiz.count + '</output><button type="button" id="plus" aria-label="One bike more"' + (wiz.count >= free.length || wiz.specific ? ' disabled' : '') + '>+</button></div></div>' + minNote() +
+      (wiz.specific && wiz.bikeIds.length < MIN_BIKES() ? '<p class="err">Please pick at least ' + MIN_BIKES() + ' bikes (you picked ' + wiz.bikeIds.length + ').</p>' : '') +
+      (wiz.start && wiz.end && free.length && free.length < MIN_BIKES() ? '<p class="err">Only ' + free.length + ' bikes are free on these days, and a booking is at least ' + MIN_BIKES() + ' bikes. Please try other dates.</p>' : '') +
       '<details class="mt"' + (wiz.specific ? ' open' : '') + '><summary class="small" style="cursor:pointer;font-weight:650">Pick specific bike numbers (optional)</summary>' +
       '<div class="bike-grid" style="margin-top:.6rem">' + all.map((x) => {
         const ok = freeIds.has(x.id), loc = Data.get('locations', x.locationId);
         return '<button type="button" class="bike-tile' + (chosen.has(x.id) ? ' on' : '') + (ok ? '' : ' busy') + '" data-bike="' + x.id + '"' + (ok ? '' : ' disabled') + ' aria-pressed="' + chosen.has(x.id) + '"><span class="num">' + esc(x.number) + '</span><span class="small">' + esc(loc ? loc.name : '') + '</span><span class="small">' + (ok ? 'Free' : 'Booked') + '</span></button>';
       }).join('') + '</div>' + (wiz.specific ? '<button type="button" class="btn ghost small-btn" id="clearpick" style="margin-top:.5rem">Clear, just give me any free bikes</button>' : '') + '</details>' +
-      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="confirm"' + (wiz.start && wiz.end && wiz.count > 0 && free.length ? '' : ' disabled') + '>Confirm booking ›</button></div>' +
-      (wiz.start && wiz.end && !free.length ? '<p class="err">No bikes are free for all of these days. Try other dates.</p>' : '') + '</section>' +
+      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="confirm"' + (wiz.start && wiz.end && wiz.count >= MIN_BIKES() && free.length >= MIN_BIKES() ? '' : ' disabled') + '>Confirm booking ›</button></div>' +
+      (wiz.start && wiz.end && !free.length ? (Data.list('bikes').length ? '<p class="err">No bikes are free for all of these days. Try other dates.</p>' : '<p class="err">Our bikes are being set up in the system right now, so they cannot be booked online yet. Please check back soon.</p>') : '') + '</section>' +
       rideCard('More bikes, more streets') + '</section>';
     $('#back', root).addEventListener('click', () => go('details'));
     $('#back2', root).addEventListener('click', () => go('details'));
@@ -142,13 +154,13 @@
       c.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(c.getAttribute('data-date')); } });
     });
     $$('[data-q]', root).forEach((b) => b.addEventListener('click', () => { wiz.end = Data.addDays(wiz.start, +b.getAttribute('data-q')); App.render(); }));
-    const setCount = (n) => { wiz.count = Math.max(1, Math.min(free.length || 1, n)); $('#cnt', root).textContent = wiz.count; $('#minus', root).disabled = wiz.count <= 1; $('#plus', root).disabled = wiz.count >= free.length; updRide(); };
+    const setCount = (n) => { wiz.count = clampCount(n, free.length); $('#cnt', root).textContent = wiz.count; $('#minus', root).disabled = wiz.count <= MIN_BIKES(); $('#plus', root).disabled = wiz.count >= free.length; updRide(); };
     $('#minus', root).addEventListener('click', () => setCount(wiz.count - 1));
     $('#plus', root).addEventListener('click', () => setCount(wiz.count + 1));
     $$('[data-bike]', root).forEach((b) => b.addEventListener('click', () => {
       const id = b.getAttribute('data-bike');
       const s = new Set(wiz.bikeIds); if (s.has(id)) s.delete(id); else s.add(id);
-      wiz.bikeIds = Array.from(s); wiz.specific = wiz.bikeIds.length > 0; if (!wiz.specific) wiz.count = Math.max(1, wiz.count); App.render();
+      wiz.bikeIds = Array.from(s); wiz.specific = wiz.bikeIds.length > 0; if (!wiz.specific) wiz.count = clampCount(wiz.count, freeFor().length); App.render();
     }));
     const cp = $('#clearpick', root); if (cp) cp.addEventListener('click', () => { wiz.bikeIds = []; wiz.specific = false; App.render(); });
     $('#confirm', root).addEventListener('click', () => go('price'));
@@ -159,38 +171,53 @@
     const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
     return '<table class="price-table"><tbody>' +
       '<tr><td>Printing & setup<span class="calc">' + plural(q.bikes, 'bike') + ' × ' + money(q.setupEach) + ' one-time fee</span></td><td class="amt">' + money(q.setup) + '</td></tr>' +
-      '<tr><td>Weekly charge<span class="calc">' + plural(q.bikes, 'bike') + ' × ' + money(q.weeklyEach) + ' a week × ' + plural(q.weeks, 'week') + ' (' + money(q.weeklyPerWeek) + ' a week)</span></td><td class="amt">' + money(q.weekly) + '</td></tr>' +
-      '<tr class="sub"><td>Subtotal</td><td class="amt">' + money(q.total) + '</td></tr>' +
-      '<tr class="total"><td>Total</td><td class="amt" id="grand">' + money(q.total) + '</td></tr></tbody></table>';
+      '<tr><td>Weekly charge<span class="calc">' + plural(q.bikes, 'bike') + ' × ' + money(q.weeklyEach) + ' a week × ' + plural(q.weeks, 'week') + '</span></td><td class="amt">' + money(q.weekly) + '</td></tr>' +
+      '<tr class="sub"><td>Subtotal</td><td class="amt">' + money(q.subtotal) + '</td></tr>' +
+      (q.discounts || []).map((x) => '<tr class="disc"><td>Discount: ' + esc(x.label) + '<span class="calc">' + x.pct + '% off</span></td><td class="amt">−' + money(x.amount) + '</td></tr>').join('') +
+      '<tr class="total"><td>Total</td><td class="amt" id="grand">' + money(q.total) + '</td></tr>' +
+      '<tr class="dep"><td><strong>Deposit due now (' + q.depositPct + '%)</strong></td><td class="amt"><strong>' + money(q.deposit) + '</strong></td></tr>' +
+      '<tr class="bal"><td>Balance later<span class="calc">paid before the ads start; we confirm the date with you</span></td><td class="amt">' + money(q.balance) + '</td></tr></tbody></table>';
   }
-  const sampleNote = () => Data.settings().pricesAreSamples ? '<div class="sample-note" role="note"><span aria-hidden="true">ℹ️</span><span><strong>Sample prices.</strong> The real printing, setup and weekly prices will be set by BikeAds.</span></div>' : '';
+  const sampleNote = () => Data.settings().pricesAreSamples ? '<div class="sample-note" role="note"><span aria-hidden="true">ℹ️</span><span><strong>Sample prices.</strong> The real printing, setup and weekly prices will be set by Media on Wheels.</span></div>' : '';
 
   /* ---- step 3: price summary ---- */
   function renderPrice(root) {
     if (!wiz.start || !wiz.end) return go('dates');
     const free = freeFor();
     if (wiz.specific) wiz.count = wiz.bikeIds.length;
-    wiz.count = Math.max(1, Math.min(wiz.count, free.length || 1));
-    const q = Data.priceQuote(wiz.count, wiz.start, wiz.end);
+    if (wiz.count < MIN_BIKES() || free.length < MIN_BIKES()) return go('dates'); /* minimum 5 bikes */
+    if (!wiz.specific) wiz.count = clampCount(wiz.count, free.length);
+    const q = quote();
     const J = window.JCal && JCal.ready ? JCal : null;
+    const promoBox = '<form class="promo" id="promo" novalidate><label>Promo code (optional)<span class="promo-row"><input class="input" name="code" autocomplete="off" value="' + esc(wiz.promo ? wiz.promo.code || '' : '') + '"><button class="btn" type="submit">' + (wiz.promo ? 'Change' : 'Apply') + '</button></span></label><p class="small" id="promo-msg" role="status">' + (wiz.promo ? '✓ ' + esc(wiz.promo.label || 'Promo code') + ': ' + (+wiz.promo.pct) + '% off' : '') + '</p></form>';
     root.innerHTML = '<section class="page narrow"><div class="page-head"><button class="back" id="back">‹ Dates & bikes</button><h1>Your price</h1></div>' + steps4(3) +
       '<div class="card"><div class="sel-sum"><strong>' + esc(wiz.biz ? wiz.biz.company : '') + '</strong><span>' + esc(areaName()) + '</span><span>' + esc(fmtRange(wiz.start, wiz.end)) + ' · ' + q.days + ' days</span>' +
       (J ? '<span class="he" lang="he">' + esc(J.day(wiz.start).heFull) + ' – ' + esc(J.day(wiz.end).heFull) + '</span>' : '') + '</div>' +
       '<div class="bike-row" style="margin:.9rem 0 .3rem"><div><strong>Bikes</strong><div class="small muted">' + (wiz.specific ? 'Bikes ' + wiz.bikeIds.map(Data.bikeLabel).join(', ') : 'Up to ' + free.length + ' free for these dates') + '</div></div>' +
-      '<div class="stepper" role="group" aria-label="Number of bikes"><button type="button" id="minus" aria-label="One bike less"' + (q.bikes <= 1 || wiz.specific ? ' disabled' : '') + '>−</button><output id="cnt" aria-live="polite">' + q.bikes + '</output><button type="button" id="plus" aria-label="One bike more"' + (q.bikes >= free.length || wiz.specific ? ' disabled' : '') + '>+</button></div></div>' +
-      '<div id="ptab">' + priceTable(q) + '</div>' + sampleNote() +
+      '<div class="stepper" role="group" aria-label="Number of bikes"><button type="button" id="minus" aria-label="One bike less"' + (q.bikes <= MIN_BIKES() || wiz.specific ? ' disabled' : '') + '>−</button><output id="cnt" aria-live="polite">' + q.bikes + '</output><button type="button" id="plus" aria-label="One bike more"' + (q.bikes >= free.length || wiz.specific ? ' disabled' : '') + '>+</button></div></div>' + minNote() +
+      '<div id="ptab">' + priceTable(q) + '</div>' + promoBox + sampleNote() +
       '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="next">Next: payment ›</button></div></div></section>';
     const upd = (n) => {
-      wiz.count = Math.max(1, Math.min(free.length || 1, n));
-      const nq = Data.priceQuote(wiz.count, wiz.start, wiz.end);
+      wiz.count = clampCount(n, free.length);
+      const nq = quote();
       $('#cnt', root).textContent = wiz.count; $('#ptab', root).innerHTML = priceTable(nq);
-      $('#minus', root).disabled = wiz.count <= 1; $('#plus', root).disabled = wiz.count >= free.length;
+      $('#minus', root).disabled = wiz.count <= MIN_BIKES(); $('#plus', root).disabled = wiz.count >= free.length;
     };
     $('#minus', root).addEventListener('click', () => upd(wiz.count - 1));
     $('#plus', root).addEventListener('click', () => upd(wiz.count + 1));
     $('#back', root).addEventListener('click', () => go('dates'));
     $('#back2', root).addEventListener('click', () => go('dates'));
     $('#next', root).addEventListener('click', () => go('pay'));
+    $('#promo', root).addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = e.target.code.value.trim(), msg = $('#promo-msg', root);
+      if (!code) { wiz.promo = null; App.render(); return; }
+      msg.textContent = 'Checking…';
+      let rule = null;
+      try { rule = window.Auth && Auth.remote ? await Auth.checkPromo(code) : Data.findPromo(code); } catch (ex) { rule = null; }
+      if (!rule) { wiz.promo = null; msg.textContent = 'That code is not valid.'; $('#ptab', root).innerHTML = priceTable(quote()); return; }
+      wiz.promo = Object.assign({}, rule, { code: rule.code || code }); App.render();
+    });
   }
 
   /* ---- step 4: card payment (DEMO: nothing is charged, the card number is never stored) ---- */
@@ -227,6 +254,7 @@
       // pick the bikes: the ones chosen, else free bikes in the chosen area first
       const free = Data.freeBikes(wiz.start, wiz.end);
       let ids;
+      if ((wiz.specific ? wiz.bikeIds.length : wiz.count) < MIN_BIKES()) { toast('A booking is at least ' + MIN_BIKES() + ' bikes.'); go('dates'); return null; }
       if (wiz.specific) {
         const busy = Data.busyBikeIds(wiz.start, wiz.end);
         if (wiz.bikeIds.some((id) => busy.has(id))) { toast('Some bikes were just booked. Please pick again.'); wiz.bikeIds = []; wiz.specific = false; go('dates'); return null; }
@@ -236,7 +264,7 @@
         const num = (a, b) => a.number.localeCompare(b.number, undefined, { numeric: true });
         ids = free.filter((x) => x.locationId === wiz.area).sort(num).concat(free.filter((x) => x.locationId !== wiz.area).sort(num)).slice(0, wiz.count).map((x) => x.id);
       }
-      const qq = Data.priceQuote(ids.length, wiz.start, wiz.end);
+      const qq = Data.priceQuote(ids.length, wiz.start, wiz.end, quoteOpts());
       const b = wiz.biz || {};
       const now = new Date().toISOString();
       const rec = Data.put('bookings', {
@@ -245,21 +273,23 @@
         areaId: wiz.area || '', areaName: areaName(), areaNote: wiz.areaNote || '',
         start: wiz.start, end: wiz.end, bikeIds: ids, mode: wiz.specific ? 'specific' : 'count',
         pricePerDay: Math.round(qq.weeklyEach / 7 * 100) / 100, weeks: qq.weeks, setupFeePerBike: qq.setupEach, weeklyPerBike: qq.weeklyEach,
-        setupTotal: qq.setup, weeklyTotal: qq.weekly, total: qq.total, deposit: qq.total, depositPaid: !!paid,
-        payment: Object.assign({ amount: qq.total, at: now }, pay),
+        setupTotal: qq.setup, weeklyTotal: qq.weekly, subtotal: qq.subtotal, discounts: qq.discounts, discount: qq.discount, promoCode: wiz.promo ? wiz.promo.code || '' : '',
+        total: qq.total, depositPct: qq.depositPct, deposit: qq.deposit, depositPaid: !!paid, balance: qq.balance, balancePaid: false,
+        payment: Object.assign({ amount: qq.deposit, at: now }, pay),
         status: 'pending', notes: note || '', createdAt: now,
-        history: [{ at: now, by: b.contact || user.name, action: action.replace('{amount}', money(qq.total)) }]
+        history: [{ at: now, by: b.contact || user.name, action: action.replace('{amount}', money(qq.deposit) + ' deposit') }]
       });
       return rec;
   }
 
   function renderPay(root, user) {
     if (!wiz.start || !wiz.end) return go('dates');
-    const q = Data.priceQuote(wiz.count, wiz.start, wiz.end);
+    const q = quote();
     const PM = payMethods(), s = Data.settings();
     if (!PM.some((m) => m[0] === wiz.pay)) wiz.pay = PM.length ? PM[0][0] : 'card';
     if (!wiz.zelleRef) wiz.zelleRef = 'MOW-' + Math.random().toString(36).slice(2, 8).toUpperCase();
-    const sum = '<table class="price-table"><tbody><tr><td>' + q.bikes + ' bike' + (q.bikes === 1 ? '' : 's') + ' · ' + esc(fmtRange(wiz.start, wiz.end)) + '</td><td class="amt">' + money(q.total) + '</td></tr></tbody></table>';
+    const sum = '<table class="price-table"><tbody><tr><td>' + q.bikes + ' bike' + (q.bikes === 1 ? '' : 's') + ' · ' + esc(fmtRange(wiz.start, wiz.end)) + '<span class="calc">Total ' + money(q.total) + ' · balance later ' + money(q.balance) + '</span></td><td class="amt">' + money(q.total) + '</td></tr>' +
+      '<tr class="dep"><td><strong>Deposit due now (' + q.depositPct + '%)</strong></td><td class="amt"><strong>' + money(q.deposit) + '</strong></td></tr></tbody></table>';
     const walletDemo = '<p class="demo-note">Demo — nothing is charged. Real Google Pay and Apple Pay connect once a payment account is set up.</p>';
     root.innerHTML = '<section class="page narrow"><div class="page-head"><button class="back" id="back">‹ Price</button><h1>Payment</h1></div>' + steps4(4) +
       '<div class="card pay-methods"><h2>How would you like to pay?</h2><div class="pm-grid" role="radiogroup" aria-label="Payment method">' +
@@ -267,7 +297,7 @@
       '<div class="card pm-panel" data-panel="gpay"' + (wiz.pay === 'gpay' ? '' : ' hidden') + '><h2>Google Pay</h2><p class="muted">Pay with a card saved in your Google account.</p>' + sum + '<button type="button" class="btn wide big pill wallet-btn" data-wallet="gpay">Pay with Google Pay</button>' + walletDemo + '</div>' +
       '<div class="card pm-panel" data-panel="applepay"' + (wiz.pay === 'applepay' ? '' : ' hidden') + '><h2>Apple Pay</h2><p class="muted">Pay with a card in your Apple Wallet.</p>' + sum + '<button type="button" class="btn wide big pill wallet-btn" data-wallet="applepay">Pay with Apple Pay</button>' + walletDemo + '</div>' +
       '<div class="card pm-panel" data-panel="zelle"' + (wiz.pay === 'zelle' ? '' : ' hidden') + '><h2>Zelle</h2>' +
-      '<ol class="zelle-steps"><li>Open Zelle in your bank app.</li><li>Send <b>' + money(q.total) + '</b> to <b>' + esc(s.zelleName || s.businessName || 'Media on Wheels') + '</b>' + (s.zelleContact ? ' · <b>' + esc(s.zelleContact) + '</b>' : ' <span class="muted">(Zelle email or phone is added in Settings)</span>') + '.</li><li>In the Zelle note, write <b class="zref">' + esc(wiz.zelleRef) + '</b>.</li></ol>' + sum +
+      '<ol class="zelle-steps"><li>Open Zelle in your bank app.</li><li>Send the deposit, <b>' + money(q.deposit) + '</b>, to <b>' + esc(s.zelleName || s.businessName || 'Media on Wheels') + '</b>' + (s.zelleContact ? ' · <b>' + esc(s.zelleContact) + '</b>' : ' <span class="muted">(Zelle email or phone is added in Settings)</span>') + '.</li><li>In the Zelle note, write <b class="zref">' + esc(wiz.zelleRef) + '</b>.</li></ol>' + sum +
       '<button type="button" class="btn primary wide big pill" id="zelle-sent">I\'ve sent it</button><p class="demo-note">Your booking waits as “Awaiting Zelle confirmation” until we see the money and mark it paid.</p></div>' +
       '<div class="card pm-panel" data-panel="card"' + (wiz.pay === 'card' ? '' : ' hidden') + '><div class="row-between"><h2>Card details</h2><span class="lock"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure checkout</span></div>' +
       '<div class="paycard" aria-hidden="true"><div class="pc-top"><span>' + esc(Data.settings().businessName || 'Media on Wheels') + '</span><span id="pc-brand">CARD</span></div><div class="pc-num" id="pc-num">•••• •••• •••• ••••</div><div class="pc-bot"><span id="pc-name">NAME ON CARD</span><span id="pc-exp">MM/YY</span></div></div>' +
@@ -278,8 +308,8 @@
       '<label>CVC<input class="input" name="cccvc" inputmode="numeric" autocomplete="cc-csc" placeholder="123" maxlength="4"><span class="fe" id="e-cvc"></span></label>' +
       '<label>ZIP<input class="input" name="cczip" inputmode="numeric" autocomplete="postal-code" placeholder="10950" maxlength="10"><span class="fe" id="e-zip"></span></label></div>' +
       '<label>Note for ' + esc(Data.settings().businessName || 'Media on Wheels') + ' (optional)<textarea class="input" name="note" rows="2" placeholder="e.g. please start the bikes on Lee Ave"></textarea></label>' +
-      '<table class="price-table"><tbody><tr><td>' + q.bikes + ' bike' + (q.bikes === 1 ? '' : 's') + ' · ' + esc(fmtRange(wiz.start, wiz.end)) + '<span class="calc">Printing & setup ' + money(q.setup) + ' + weekly ' + money(q.weekly) + '</span></td><td class="amt">' + money(q.total) + '</td></tr></tbody></table>' +
-      '<button class="btn primary wide big" type="submit" id="pay">Pay ' + money(q.total) + '</button>' +
+      sum +
+      '<button class="btn primary wide big" type="submit" id="pay">Pay deposit ' + money(q.deposit) + '</button>' +
       '<p class="demo-note">Demo — real card processing connects once the payment account is set up. Nothing is charged, and the card number is not saved.</p></form></div></section>';
     $('#back', root).addEventListener('click', () => go('price'));
     $$('[data-pm]', root).forEach((t) => t.addEventListener('click', () => {
@@ -289,8 +319,8 @@
     }));
     $$('[data-wallet]', root).forEach((btn) => btn.addEventListener('click', () => {
       const k = btn.getAttribute('data-wallet'), name = k === 'gpay' ? 'Google Pay' : 'Apple Pay';
-      const m = UI.modal(name + ' (demo)', '<div class="wallet-sheet"><p class="muted">Pay ' + esc(s.businessName || 'Media on Wheels') + '</p><p class="ws-amt">' + money(q.total) + '</p>' +
-        '<p class="small muted">' + q.bikes + ' bike' + (q.bikes === 1 ? '' : 's') + ' · ' + esc(fmtRange(wiz.start, wiz.end)) + '</p>' +
+      const m = UI.modal(name + ' (demo)', '<div class="wallet-sheet"><p class="muted">Pay ' + esc(s.businessName || 'Media on Wheels') + '</p><p class="ws-amt">' + money(q.deposit) + '</p>' +
+        '<p class="small muted">Deposit (' + q.depositPct + '%) · ' + q.bikes + ' bike' + (q.bikes === 1 ? '' : 's') + ' · ' + esc(fmtRange(wiz.start, wiz.end)) + '</p>' +
         '<button class="btn primary wide big pill" id="ws-ok">Confirm with ' + name + '</button><p class="demo-note">Demo sheet. No money moves.</p></div>');
       m.querySelector('#ws-ok').addEventListener('click', () => {
         const rec = placeBooking(user, { method: k, brand: name, demo: true }, 'Requested and paid {amount} with ' + name + ' (demo)', true, f.note.value.trim());
@@ -339,13 +369,15 @@
     const b = Data.get('bookings', wiz.lastId);
     const J = window.JCal && JCal.ready ? JCal : null;
     root.innerHTML = '<section class="page narrow center"><div class="done-mark" aria-hidden="true">✓</div><h1>Booking confirmed</h1>' +
-      '<p class="lead">' + (b && b.payment && b.payment.method === 'zelle' ? 'Thank you! Your booking is sent. It shows as “Awaiting Zelle confirmation” until we see your Zelle payment.' : 'Thank you! Your payment went through (demo) and your booking is sent to ' + esc(Data.settings().businessName || 'Media on Wheels') + '.') + '</p>' +
+      '<p class="lead">' + (b && b.payment && b.payment.method === 'zelle' ? 'Thank you! Your booking is sent. It shows as “Awaiting Zelle confirmation” until we see your Zelle payment.' : 'Thank you! Your deposit went through (demo) and your booking is sent to ' + esc(Data.settings().businessName || 'Media on Wheels') + '.') + '</p>' +
       (b ? '<div class="card confirm-card"><dl class="kv wide"><dt>Booking #</dt><dd>' + 'BK-' + esc(String(b.id).slice(-6).toUpperCase()) + '</dd>' +
         '<dt>Business</dt><dd>' + esc(b.company) + '</dd><dt>Area</dt><dd>' + esc(b.areaName || '') + (b.areaNote ? ' · ' + esc(b.areaNote) : '') + '</dd>' +
         '<dt>Dates</dt><dd>' + esc(fmtRange(b.start, b.end)) + (J ? '<br><span class="he" lang="he">' + esc(J.day(b.start).heFull) + ' – ' + esc(J.day(b.end).heFull) + '</span>' : '') + '</dd>' +
-        '<dt>Bikes</dt><dd>' + b.bikeIds.length + ' (' + b.bikeIds.map(Data.bikeLabel).join(', ') + ')</dd>' +
+        '<dt>Bikes</dt><dd>' + b.bikeIds.length + '</dd>' + /* Nov 8 2026 (client): count only, no bike numbers (admin still sees them) */
         '<dt>Printing & setup</dt><dd>' + money(b.setupTotal) + '</dd><dt>Weekly (' + b.weeks + ' wk)</dt><dd>' + money(b.weeklyTotal) + '</dd>' +
-        '<dt class="hl">' + (b.depositPaid ? 'Paid' : 'To pay') + '</dt><dd class="hl">' + money(b.total) + '</dd><dt>Payment</dt><dd>' + payDesc(b) + '</dd>' +
+        (b.discount ? '<dt>Discount</dt><dd>−' + money(b.discount) + '</dd>' : '') + '<dt>Total</dt><dd>' + money(b.total) + '</dd>' +
+        '<dt class="hl">' + (b.depositPaid ? 'Deposit paid' : 'Deposit to pay') + (b.depositPct != null ? ' (' + b.depositPct + '%)' : '') + '</dt><dd class="hl">' + money(b.deposit != null ? b.deposit : b.total) + '</dd>' +
+        (b.balance != null ? '<dt>Balance later</dt><dd>' + money(b.balance) + (b.balancePaid ? ' · paid' : '') + '</dd>' : '') + '<dt>Payment</dt><dd>' + payDesc(b) + '</dd>' +
         '<dt>Status</dt><dd><span class="badge st-pending">Pending</span> until ' + esc(Data.settings().businessName || 'Media on Wheels') + ' approves it</dd></dl></div>' : '') +
       '<div class="row-center"><a class="btn primary" href="#/client/bookings" id="tomy">My bookings</a><button class="btn ghost" id="again">Book more</button></div></section>';
     $('#again', root).addEventListener('click', () => { resetWiz(); App.render(); });
@@ -354,6 +386,7 @@
 
   /* ================= MY BOOKINGS ================= */
   function payLine(b) {
+    if (b.balance != null) return 'Total ' + money(b.total) + ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid' : b.payment && b.payment.method === 'zelle' ? ' (awaiting Zelle)' : ' due') + ' · balance ' + money(b.balance) + (b.balancePaid ? ' paid' : ' due');
     if (b.payment && b.payment.method === 'zelle') return 'Total ' + money(b.total) + ' · ' + payDesc(b);
     if (b.payment && (b.payment.last4 || b.payment.brand)) return 'Total ' + money(b.total) + ' · paid by ' + payDesc(b);
     return 'Total ' + money(b.total) + ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid (demo)' : '');
@@ -363,7 +396,7 @@
     const mine = Data.list('bookings').filter((b) => b.clientId === user.id).sort((a, b) => b.start.localeCompare(a.start));
     root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>My bookings</h1><a class="btn primary" href="#/client/book" id="newbk">+ New</a></div>' +
       (mine.length ? mine.map((b) => '<article class="card my-bk"><div class="bk-title"><strong>' + fmtRange(b.start, b.end) + '</strong> ' + badge(b) + '</div>' +
-        '<div class="small">' + b.bikeIds.length + ' bikes: ' + b.bikeIds.map(Data.bikeLabel).join(', ') + (b.areaName ? ' · ' + esc(b.areaName) : '') + '</div>' +
+        '<div class="small">' + b.bikeIds.length + ' bike' + (b.bikeIds.length === 1 ? '' : 's') + (b.areaName ? ' · ' + esc(b.areaName) : '') + '</div>' +
         (b.setupTotal != null ? '<div class="small muted">Printing & setup ' + money(b.setupTotal) + ' · weekly ' + money(b.weeklyTotal) + '</div>' : '') +
         '<div class="small muted">' + payLine(b) + '</div>' +
         (statusOf(b) === 'pending' ? '<div class="row-end"><button class="btn danger-ghost" data-cancel="' + b.id + '">Cancel request</button></div>' : '') + '</article>').join('')

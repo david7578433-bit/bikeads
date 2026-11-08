@@ -79,7 +79,7 @@
         '<label>Poster picture, shown while the video loads (optional)<input class="input" type="file" name="poster" accept="image/jpeg,image/png,image/webp"></label>' +
         '<p class="err" id="hv-err" role="alert"></p>' +
         '<div class="row-end hv-actions"><button type="button" class="btn ghost" id="hv-reset"' + (mode === 'default' ? ' disabled' : '') + '>Use default video</button><button class="btn primary">Save video</button></div>' +
-        '<p class="small muted">Demo note: an uploaded file is saved in this browser only. When the shared database is connected, every visitor will see it. A pasted link works for everyone already.</p></form>';
+        '<p class="small muted">Note: an uploaded file is saved in this browser only for now (file storage in the database comes next). A pasted link works for everyone already.</p></form>';
       const f = host.querySelector('#hv-form'), err = host.querySelector('#hv-err'), prev = host.querySelector('#hv-prev');
       f.file.addEventListener('change', () => { const x = f.file.files[0]; if (x) { prev.removeAttribute('poster'); prev.src = blobUrl(x); prev.play().catch(() => {}); } });
       f.url.addEventListener('change', () => { if (okUrl(f.url.value)) prev.src = f.url.value.trim(); });

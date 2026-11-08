@@ -32,17 +32,20 @@ function load(files, extra) {
   const ctx = Object.assign({ window: win, localStorage: { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } }, console, Date, Math, JSON, Intl }, extra || {});
   vm.createContext(ctx);
   files.forEach((f) => vm.runInContext(read(f) + (f.includes('hebcal') ? '\n;window.hebcal = hebcal;' : ''), ctx));
+  if (ctx.window.Data) require('./fixtures/demo-data.js').use(ctx); // old demo set, tests only
   return ctx.window;
 }
 
-test('v3 price math: printing & setup per bike + weekly per bike per week, sample prices', async () => {
+test('price math: printing & setup per bike + weekly per bike per week, REAL prices 150 / 75 (Nov 8 2026)', async () => {
   const { Data } = load(['js/data.js']);
   await Data.init();
   const s = Data.settings();
-  assert.strictEqual(s.setupFeePerBike, 75); assert.strictEqual(s.weeklyPerBike, 150); assert.strictEqual(s.pricesAreSamples, true);
+  assert.strictEqual(s.setupFeePerBike, 150); assert.strictEqual(s.weeklyPerBike, 75);
   const st = Data.addDays(Data.today(), 30), en = Data.addDays(st, 13);
   const q = Data.priceQuote(10, st, en);
-  assert.strictEqual(q.weeks, 2); assert.strictEqual(q.setup, 750); assert.strictEqual(q.weekly, 3000); assert.strictEqual(q.total, 3750);
+  assert.strictEqual(q.weeks, 2); assert.strictEqual(q.setup, 1500); assert.strictEqual(q.weekly, 1500); assert.strictEqual(q.total, 3000);
+  const q5 = Data.priceQuote(5, st, Data.addDays(st, 6)); // the client's example: 5 bikes x 1 week
+  assert.strictEqual(q5.setup, 750); assert.strictEqual(q5.weekly, 375); assert.strictEqual(q5.total, 1125);
   assert.strictEqual(Data.priceQuote(1, st, Data.addDays(st, 7)).weeks, 2); // 8 days bill as 2 weeks
   assert.strictEqual(Data.priceQuote(1, st, st).weeks, 1);
 });

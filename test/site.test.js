@@ -12,7 +12,8 @@ test('index.html has title, viewport and only local assets that exist', () => {
   assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1/);
   const refs = [...html.matchAll(/(?:src|href)="([^"#?]+)(?:\?[^"]*)?"/g)].map((m) => m[1]);
   assert.ok(refs.length >= 8);
-  for (const r of refs) {
+  const own = (html.match(/<link rel="canonical" href="([^"]+)"/) || [])[1]; // the site's own address (SEO), not an asset
+  for (const r of refs.filter((x) => x !== own)) {
     assert.ok(!/^https?:/.test(r), 'remote asset: ' + r);
     assert.ok(fs.existsSync(path.join(site, r)), 'missing file: ' + r);
   }
@@ -36,7 +37,7 @@ test('core features are present in the app code', () => {
   assert.match(admin, /Calendar/); assert.match(admin, /List/); assert.match(admin, /Reconcile/); assert.match(admin, /Export CSV/);
   // v3 (Nov 4 2026, David's request): client books Details → Dates & bikes → Price → Payment; the map is admin-only
   assert.match(client, /Where should the bikes ride\?/); assert.match(client, /Confirm booking/); assert.match(client, /Printing & setup/); assert.match(client, /Weekly charge/); assert.match(client, /Card number/);
-  assert.match(app, /admin@bikeads\.demo/); assert.match(app, /client@bikeads\.demo/); assert.match(app, /Create a client account/);
+  assert.ok(!/@bikeads\.demo/.test(app), 'no demo logins (Nov 8 2026)'); assert.match(app, /Create a client account/); assert.match(app, /Continue with Google/);
 });
 
 function loadData() {
@@ -44,6 +45,7 @@ function loadData() {
   const ctx = { window: {}, localStorage: { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } }, console, Date, Math, JSON };
   vm.createContext(ctx);
   vm.runInContext(read('js/data.js'), ctx);
+  require('./fixtures/demo-data.js').use(ctx); // old demo set, tests only (the site starts empty since Nov 8 2026)
   return ctx.window.Data;
 }
 

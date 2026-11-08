@@ -325,3 +325,27 @@ main#main { margin: 0; width: 100%; max-width: none; border-radius: 0; }
 @media (min-width: 760px) { main#main { margin: 0; width: 100%; max-width: none; border-radius: 0; padding-left: clamp(1.2rem, 4vw, 3.5rem); padding-right: clamp(1.2rem, 4vw, 3.5rem); } }
 .auth:not(.home) { border: 0; border-radius: 0; }
 html, body { margin: 0; }
+
+/* Nov 8 2026: real sign-in — "Continue with Google" button, "or" divider, notes */
+.btn.google { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #1f2937; border: 1px solid #d1d5db; font-weight: 600; box-shadow: 0 1px 2px rgba(17, 24, 39, .06); }
+.btn.google:hover { background: #f9fafb; border-color: #9ca3af; }
+.btn.google:focus-visible { outline: 3px solid #4f46e5; outline-offset: 2px; }
+.btn.google .g-logo { width: 20px; height: 20px; flex: none; }
+.btn.google[disabled] { opacity: .65; }
+#google-note { margin: 6px 0 0; }
+.or { display: flex; align-items: center; gap: 12px; margin: 14px 0 6px; color: #6b7280; font-size: .85rem; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: #e5e7eb; }
+.store-note { margin-top: 10px; }
+.min-note { margin: .35rem 0 0; text-align: right; }
+/* Nov 8 2026: admin price table discounts, price-step deposit lines, promo code */
+.disc-list { list-style: none; margin: .6rem 0; padding: 0; display: grid; gap: .5rem; }
+.disc-item { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem .85rem; border: 1px solid #e5e7eb; border-radius: 14px; background: #fff; flex-wrap: wrap; }
+.disc-item > div:first-child { display: grid; gap: .15rem; min-width: 0; }
+.disc-item.off { opacity: .6; }
+.disc-actions { display: flex; gap: .4rem; }
+.price-table tr.disc td { color: #047857; }
+.price-table tr.dep td { border-top: 2px solid #111827; padding-top: .6rem; }
+.promo { margin-top: .8rem; }
+.promo-row { display: flex; gap: .5rem; margin-top: .3rem; }
+.promo-row .input { flex: 1; min-width: 0; text-transform: uppercase; }
+#promo-msg { margin: .3rem 0 0; color: #047857; min-height: 1.2em; }

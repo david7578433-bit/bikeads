@@ -63,10 +63,10 @@
     return true;
   }
 
-  function addTo(st, h) {
-    const t = h.today();
-    ['stores', 'drivers', 'orders', 'smslog', 'shifts', 'invoices', 'payouts'].forEach((c) => { if (!Array.isArray(st[c])) st[c] = []; });
-    st.settings.deliver = {
+  /* Delivery settings only (prices, texts, plugin switches) — no demo stores, drivers, orders or logins.
+   * This is what a new database / device gets since Nov 8 2026 (production start). */
+  function deliverSettings() {
+    return {
       name: 'BikeAds Deliver',
       plugins: { driver: true, store: true, boss: true },
       pricePerDelivery: 7, bagsIncluded: 3, extraBagPrice: 1, failedCharge: 3,
@@ -81,6 +81,18 @@
       },
       seededAt: new Date().toISOString()
     };
+  }
+  function addSettings(st) {
+    ['stores', 'drivers', 'orders', 'smslog', 'shifts', 'invoices', 'payouts'].forEach((c) => { if (!Array.isArray(st[c])) st[c] = []; });
+    st.settings.deliver = deliverSettings();
+    return st;
+  }
+
+  /* The old DEMO set (fake stores, drivers, orders and demo logins). Not used by the app any more. */
+  function addTo(st, h) {
+    const t = h.today();
+    ['stores', 'drivers', 'orders', 'smslog', 'shifts', 'invoices', 'payouts'].forEach((c) => { if (!Array.isArray(st[c])) st[c] = []; });
+    st.settings.deliver = deliverSettings();
 
     const stores = [
       { id: 'st_kj', name: 'Bakertown Fresh Market', address: '2 Bakertown Rd, Monroe, NY 10950', lat: 41.3326, lng: -74.1641, locationId: 'loc_monroe', phone: '(845) 555-0110', contact: 'Mendy Berger', pricePerDelivery: 6, active: true },
@@ -167,5 +179,5 @@
     return st;
   }
 
-  window.DeliverSeed = { addTo, rollDay, DEMO_PHOTO, demoSignature };
+  window.DeliverSeed = { addSettings, addTo, rollDay, DEMO_PHOTO, demoSignature };
 })();

@@ -2,8 +2,15 @@
 
 Media on Wheels puts local businesses' ads on the grocery-delivery bikes of Williamsburg and Boro Park. This repo keeps its original name (`bikeads`) and URLs.
 
-Live demo (still v3.1 until approved): https://bikeads.sites.tab.bot/ and https://david7578433-bit.github.io/bikeads/
-v4 preview (branch `v4-light`): https://mediaonwheels-preview.sites.tab.bot/
+Live (v4.1, `main`): https://bikeads.sites.tab.bot/ and https://david7578433-bit.github.io/bikeads/
+Production-prep preview (branch `production-prep`): https://mediaonwheels-preview.sites.tab.bot/
+
+## Production prep (Nov 8, 2026, branch `production-prep`)
+- **No test members:** the demo accounts, demo logins (`…@bikeads.demo`), fake clients, bookings, transactions, stores and drivers are gone. A new database / device starts empty with the two service areas (Williamsburg, Borough Park) and the settings. SAMPLE prices / stats / reviews stay, clearly marked SAMPLE.
+- **Real sign-in + shared database (Supabase):** `docs/js/auth.js`. Email + password sign-up / log-in, "Continue with Google", forgot password. Roles (admin / client) in `mow_profiles`, Row Level Security: a client sees only their own account and bookings (plus which bikes are taken on which days, no names); the admin sees everything. SQL: `supabase/schema.sql` (all objects `mow_…`, additive only, so it can sit inside an existing project); moving it later: `supabase/MOVE.md`.
+- **Keys:** `SUPABASE_URL` / `SUPABASE_ANON_KEY` placeholders in `docs/js/config.js`, empty for now. While empty, the site works in "this device" mode (browser-only, passwords stored as a salted hash, admin = david7578433@gmail.com) and the Google button says "not configured yet".
+- **Google search:** title, description, canonical, Open Graph image, JSON-LD (LocalBusiness + Service, Williamsburg & Boro Park, 6 days a week, not on Shabbos), `robots.txt`, `sitemap.xml`, `favicon.ico`, Search Console placeholder.
+- All steps for the database, Google sign-in, Search Console and the own domain: **`PRODUCTION.md`**.
 
 In this repo the site lives in `docs/` (GitHub Pages serves that folder from `main`).
 

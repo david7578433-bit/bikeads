@@ -1,0 +1,4 @@
+# Media on Wheels
+User-agent: *
+Allow: /
+Sitemap: https://mediaonwheelsnyc.com/sitemap.xml

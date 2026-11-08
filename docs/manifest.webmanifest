@@ -6,7 +6,7 @@
  "display": "standalone",
  "background_color": "#f5f6f8",
  "theme_color": "#111827",
- "description": "Bike ads and local deliveries: driver, store, boss and admin.",
+ "description": "Ads on the grocery-delivery bikes of Williamsburg and Boro Park: see prices, book bikes, manage your bookings.",
  "icons": [
   {
    "src": "icons/icon-192.png",

@@ -138,9 +138,13 @@
     const s = statusOf(b);
     return '<div class="bk-row"><div class="bk-main"><div class="bk-title"><strong>' + esc(b.company) + '</strong> ' + badge(b) + '</div>' +
       '<div class="small">' + fmtRange(b.start, b.end) + ' · ' + Data.days(b.start, b.end) + ' days · ' + b.bikeIds.length + ' bikes (' + b.bikeIds.map(Data.bikeLabel).join(', ') + ')' + (b.mode === 'count' ? ' · client asked for ' + b.bikeIds.length + ' bikes' : b.mode !== 'specific' ? ' · asked for any ' + b.mode.replace('any', '') : '') + '</div>' +
-      '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + (b.payment && b.payment.method === 'zelle' ? ' · Zelle, note ' + esc(b.payment.ref || '') + (b.depositPaid ? ' · <b>paid</b>' : ' · <b class="zelle-wait">awaiting Zelle confirmation</b>') : b.payment && b.payment.last4 ? ' · paid in full by ' + esc(b.payment.brand) + ' •••• ' + esc(b.payment.last4) + ' (demo)' : b.payment && b.payment.brand ? ' · paid in full with ' + esc(b.payment.brand) + ' (demo)' : ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid (demo)' : ' not paid')) + '</div>' +
+      (b.balance != null ? '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + (b.discount ? ' (discount −' + money(b.discount) + ')' : '') +
+        ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' <b>paid</b>' : b.payment && b.payment.method === 'zelle' ? ' · Zelle, note ' + esc(b.payment.ref || '') + ' · <b class="zelle-wait">awaiting Zelle confirmation</b>' : ' due') +
+        ' · balance ' + money(b.balance) + (b.balancePaid ? ' <b>paid</b>' : ' <b class="zelle-wait">due</b>') + '</div>' :
+      '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + (b.payment && b.payment.method === 'zelle' ? ' · Zelle, note ' + esc(b.payment.ref || '') + (b.depositPaid ? ' · <b>paid</b>' : ' · <b class="zelle-wait">awaiting Zelle confirmation</b>') : b.payment && b.payment.last4 ? ' · paid in full by ' + esc(b.payment.brand) + ' •••• ' + esc(b.payment.last4) + ' (demo)' : b.payment && b.payment.brand ? ' · paid in full with ' + esc(b.payment.brand) + ' (demo)' : ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid (demo)' : ' not paid')) + '</div>') +
       (b.setupTotal != null ? '<div class="small muted">Printing &amp; setup ' + money(b.setupTotal) + ' · weekly ' + money(b.weeklyTotal) + ' (' + b.weeks + ' wk)' + (b.areaName ? ' · area: ' + esc(b.areaName) : '') + (b.areaNote ? ' (' + esc(b.areaNote) + ')' : '') + (b.contactPhone ? ' · ' + esc(b.contactPhone) : '') + '</div>' : '') + '</div>' +
-      '<div class="bk-actions">' + (b.payment && b.payment.method === 'zelle' && !b.depositPaid ? '<button class="btn ok" data-zelle-paid="' + b.id + '">Mark Zelle paid</button>' : '') + (s === 'pending' ? '<button class="btn ok" data-approve="' + b.id + '">✓ Approve</button><button class="btn danger-ghost" data-decline="' + b.id + '">✕ Decline</button>' : '') +
+      '<div class="bk-actions">' + (b.payment && b.payment.method === 'zelle' && !b.depositPaid ? '<button class="btn ok" data-zelle-paid="' + b.id + '">Mark Zelle paid</button>' : '') +
+      (b.balance > 0 && b.depositPaid && !b.balancePaid && (s === 'approved' || s === 'active' || s === 'completed' || b.status === 'approved') ? '<button class="btn ok" data-balance-paid="' + b.id + '">Mark balance paid</button>' : '') + (s === 'pending' ? '<button class="btn ok" data-approve="' + b.id + '">✓ Approve</button><button class="btn danger-ghost" data-decline="' + b.id + '">✕ Decline</button>' : '') +
       '<button class="btn ghost" data-open="' + b.id + '">Edit</button></div></div>';
   }
 
@@ -184,6 +188,7 @@
     const ap = e.target.closest('[data-approve]'); if (ap) { approve(ap.getAttribute('data-approve')); return; }
     const de = e.target.closest('[data-decline]'); if (de) { decline(de.getAttribute('data-decline')); return; }
     const zp = e.target.closest('[data-zelle-paid]'); if (zp) { zellePaid(zp.getAttribute('data-zelle-paid')); return; }
+    const bp = e.target.closest('[data-balance-paid]'); if (bp) { balancePaid(bp.getAttribute('data-balance-paid')); return; }
     const op = e.target.closest('[data-open]'); if (op) { e.stopPropagation(); editBooking(op.getAttribute('data-open')); }
   }
 
@@ -192,10 +197,21 @@
   /* v4.1: a Zelle booking waits until the admin sees the money and marks it paid. */
   function zellePaid(id) {
     const b = Data.get('bookings', id); if (!b) return;
-    confirmBox('Zelle received?', 'Mark ' + money(b.total) + ' from ' + esc(b.company) + ' (note ' + esc((b.payment && b.payment.ref) || '') + ') as paid?', 'Mark paid', () => {
+    const amt = b.balance != null ? b.deposit : b.total; /* Nov 8 2026: the client pays a deposit first */
+    confirmBox('Zelle received?', 'Mark ' + money(amt) + ' from ' + esc(b.company) + ' (note ' + esc((b.payment && b.payment.ref) || '') + ') as paid?', 'Mark paid', () => {
       Data.put('bookings', { id, depositPaid: true, payment: Object.assign({}, b.payment, { status: 'paid', paidAt: new Date().toISOString() }), history: addHistory(b, 'Zelle payment received, marked paid') });
-      if (b.status === 'approved' && !Data.list('transactions').some((t) => t.bookingId === id && t.category === 'Booking payment')) Data.put('transactions', { date: Data.today(), description: 'Zelle ' + ((b.payment && b.payment.ref) || '') + ' - ' + b.company, amount: b.total, category: 'Booking payment', bookingId: id, reconciled: false, createdAt: new Date().toISOString() });
+      if (b.status === 'approved' && !Data.list('transactions').some((t) => t.bookingId === id && t.category === 'Booking payment')) Data.put('transactions', { date: Data.today(), description: 'Zelle ' + ((b.payment && b.payment.ref) || '') + ' - ' + b.company, amount: amt, category: b.balance != null ? 'Booking deposit' : 'Booking payment', bookingId: id, reconciled: false, createdAt: new Date().toISOString() });
       toast('Marked paid'); App.render();
+    });
+  }
+
+  /* Nov 8 2026: the balance (total minus the deposit) is paid later; the admin marks it paid and it goes into the books. */
+  function balancePaid(id) {
+    const b = Data.get('bookings', id); if (!b) return;
+    confirmBox('Balance received?', 'Mark the balance of ' + money(b.balance) + ' from ' + esc(b.company) + ' as paid?', 'Mark paid', () => {
+      Data.put('bookings', { id, balancePaid: true, balancePaidAt: new Date().toISOString(), history: addHistory(b, 'Balance ' + money(b.balance) + ' received, marked paid') });
+      if (!Data.list('transactions').some((t) => t.bookingId === id && t.category === 'Booking balance')) Data.put('transactions', { date: Data.today(), description: 'Balance - ' + b.company, amount: b.balance, category: 'Booking balance', bookingId: id, reconciled: false, createdAt: new Date().toISOString() });
+      toast('Balance marked paid'); App.render();
     });
   }
 
@@ -416,25 +432,83 @@
     });
   }
 
+
+  /* ================= PRICE TABLE: DISCOUNTS (Nov 8 2026, David) =================
+   * Rules the booking price step uses live: by number of bikes, by number of weeks, a promo code, or one client.
+   * Saved in the collection 'discounts' (database table mow_discounts when the database is connected). */
+  const DKINDS = [['bikes', 'Number of bikes'], ['weeks', 'Number of weeks'], ['promo', 'Promo code'], ['client', 'One client']];
+  function discountsAdmin(host) {
+    const s = Data.settings();
+    const rules = Data.list('discounts').sort((a, b) => DKINDS.findIndex((k) => k[0] === a.kind) - DKINDS.findIndex((k) => k[0] === b.kind) || (+a.min || 0) - (+b.min || 0));
+    const clients = Data.list('users').filter((u) => u.role === 'client');
+    const cond = (r) => r.kind === 'bikes' ? (+r.min) + '+ bikes' : r.kind === 'weeks' ? (+r.min) + '+ weeks' : r.kind === 'promo' ? 'code ' + esc(r.code || '') : esc(r.clientEmail || (Data.get('users', r.clientId) || {}).email || '');
+    const ex = s.setupFeePerBike != null ? Data.priceQuote(10, Data.today(), Data.addDays(Data.today(), 27)) : null;
+    host.innerHTML = '<h2>Price table &amp; discounts</h2>' +
+      '<table class="price-table admin-prices"><tbody><tr><td>Printing &amp; setup, per bike (one time)</td><td class="amt">' + money(s.setupFeePerBike) + '</td></tr>' +
+      '<tr><td>Weekly charge, per bike per week</td><td class="amt">' + money(s.weeklyPerBike) + '</td></tr>' +
+      '<tr><td>Deposit due at booking</td><td class="amt">' + (s.depositPct == null ? 20 : s.depositPct) + '%</td></tr>' +
+      '<tr><td>Minimum bikes per booking</td><td class="amt">' + (s.minBikes || 5) + '</td></tr></tbody></table>' +
+      '<p class="small muted">Change these prices in the form above. Discounts below are taken off the subtotal on the client\'s price page. For each type the biggest matching discount counts; different types add up (at most 90% off).</p>' +
+      (rules.length ? '<ul class="disc-list">' + rules.map((r) =>
+        '<li class="disc-item' + (r.active === false ? ' off' : '') + '"><div><strong>' + esc(r.label || (DKINDS.find((k) => k[0] === r.kind) || [0, r.kind])[1]) + '</strong>' +
+        '<span class="small muted">' + cond(r) + ' · <b>' + (+r.pct) + '% off</b>' + (r.active === false ? ' · off' : '') + '</span></div>' +
+        '<div class="disc-actions"><button class="btn ghost small-btn" data-dedit="' + r.id + '">Edit</button><button class="btn danger-ghost small-btn" data-ddel="' + r.id + '">Delete</button></div></li>').join('') + '</ul>' : '<p class="muted">No discounts yet.</p>') +
+      (ex ? '<p class="small muted">Example: 10 bikes for 4 weeks = ' + money(ex.subtotal) + (ex.discount ? ' − ' + money(ex.discount) + ' discount = ' + money(ex.total) : '') + ', deposit now ' + money(ex.deposit) + '.</p>' : '') +
+      '<div class="row-end"><button class="btn" id="dadd">+ Add discount</button></div>';
+    const edit = (id) => {
+      const r = id ? Data.get('discounts', id) : { kind: 'bikes', min: 10, pct: 10, active: true };
+      const m = UI.modal(id ? 'Edit discount' : 'New discount', '<form class="form" id="df">' +
+        '<label>Type<select class="input" name="kind">' + DKINDS.map(([k, l]) => '<option value="' + k + '"' + (r.kind === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
+        '<label data-for="bikes weeks">From how many (bikes / weeks)<input class="input" type="number" min="1" step="1" name="min" value="' + (+r.min || 1) + '"></label>' +
+        '<label data-for="promo">Promo code<input class="input" name="code" autocomplete="off" value="' + esc(r.code || '') + '"></label>' +
+        '<label data-for="client">Client<select class="input" name="clientId"><option value="">Pick a client…</option>' + clients.map((u) => '<option value="' + esc(u.id) + '"' + (r.clientId === u.id ? ' selected' : '') + '>' + esc((u.company || u.name) + ' · ' + u.email) + '</option>').join('') + '</select></label>' +
+        '<label data-for="client">…or client email<input class="input" type="email" name="clientEmail" value="' + esc(r.clientEmail || '') + '"></label>' +
+        '<label>Percent off<input class="input" type="number" min="1" max="90" step="0.5" name="pct" value="' + (+r.pct || 10) + '" required></label>' +
+        '<label>Name shown to the client (optional)<input class="input" name="label" value="' + esc(r.label || '') + '" placeholder="e.g. Big campaign discount"></label>' +
+        '<label class="check"><input type="checkbox" name="active"' + (r.active === false ? '' : ' checked') + '> On</label>' +
+        '<p class="err" id="derr" role="alert"></p><div class="row-end"><button class="btn primary">Save discount</button></div></form>');
+      const f = m.querySelector('#df');
+      const show = () => m.querySelectorAll('[data-for]').forEach((l) => { l.style.display = l.getAttribute('data-for').split(' ').includes(f.kind.value) ? '' : 'none'; });
+      f.kind.addEventListener('change', show); show();
+      f.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const kind = f.kind.value, pct = +f.pct.value;
+        if (!(pct > 0 && pct <= 90)) { m.querySelector('#derr').textContent = 'Percent off must be between 1 and 90.'; return; }
+        const rec = { id: id || undefined, kind, pct, label: f.label.value.trim(), active: f.active.checked, min: null, code: '', clientId: '', clientEmail: '' };
+        if (kind === 'bikes' || kind === 'weeks') rec.min = Math.max(1, Math.round(+f.min.value || 1));
+        if (kind === 'promo') { rec.code = f.code.value.trim().toUpperCase(); if (!rec.code) { m.querySelector('#derr').textContent = 'Type the promo code.'; return; }
+          if (Data.list('discounts').some((x) => x.kind === 'promo' && x.id !== id && String(x.code).toUpperCase() === rec.code)) { m.querySelector('#derr').textContent = 'That code already exists.'; return; } }
+        if (kind === 'client') { rec.clientId = f.clientId.value; const u = Data.get('users', rec.clientId); rec.clientEmail = (f.clientEmail.value.trim() || (u && u.email) || '').toLowerCase(); if (!rec.clientId && !rec.clientEmail) { m.querySelector('#derr').textContent = 'Pick a client or type the email.'; return; } }
+        Data.put('discounts', rec); UI.closeModal(); toast('Discount saved'); discountsAdmin(host);
+      });
+    };
+    $('#dadd', host).addEventListener('click', () => edit(null));
+    $$('[data-dedit]', host).forEach((b) => b.addEventListener('click', () => edit(b.getAttribute('data-dedit'))));
+    $$('[data-ddel]', host).forEach((b) => b.addEventListener('click', () => confirmBox('Delete this discount?', 'Bookings already made keep their price.', 'Delete', () => { Data.remove('discounts', b.getAttribute('data-ddel')); toast('Discount deleted'); discountsAdmin(host); }, true)));
+  }
+
   function renderSettings(root) {
     const s = Data.settings();
     root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>Settings</h1></div>' +
       '<form class="card form" id="setform"><h2>Business &amp; prices</h2>' +
       '<label>Business name<input class="input" name="businessName" value="' + esc(s.businessName) + '"></label>' +
       '<div class="two"><label>Price per bike per day ($)<input class="input" type="number" step="0.01" min="0" name="pricePerBikeDay" value="' + s.pricePerBikeDay + '"></label>' +
-      '<label>Deposit (%)<input class="input" type="number" step="1" min="0" max="100" name="depositPct" value="' + s.depositPct + '"></label></div>' +
+      '<label>Deposit due at booking (%)<input class="input" type="number" step="1" min="0" max="100" name="depositPct" value="' + (s.depositPct == null ? 20 : s.depositPct) + '"></label></div>' +
       '<label>Bank opening balance ($)<input class="input" type="number" step="0.01" name="openingBalance" value="' + (s.openingBalance || 0) + '"></label>' +
       '<h2 style="margin-top:.6rem">Client checkout prices</h2>' +
       (s.pricesAreSamples ? '<div class="sample-note" role="note"><span aria-hidden="true">ℹ️</span><span><strong>These are sample prices.</strong> Type your real prices and save; clients see them on the price page.</span></div>' : '') +
-      '<div class="two"><label>Printing &amp; setup, per bike, one time ($)<input class="input" type="number" step="0.01" min="0" name="setupFeePerBike" value="' + (s.setupFeePerBike != null ? s.setupFeePerBike : 75) + '"></label>' +
-      '<label>Weekly charge, per bike per week ($)<input class="input" type="number" step="0.01" min="0" name="weeklyPerBike" value="' + (s.weeklyPerBike != null ? s.weeklyPerBike : 150) + '"></label></div>' +
+      '<div class="two"><label>Printing &amp; setup, per bike, one time ($)<input class="input" type="number" step="0.01" min="0" name="setupFeePerBike" value="' + (s.setupFeePerBike != null ? s.setupFeePerBike : 150) + '"></label>' +
+      '<label>Weekly charge, per bike per week ($)<input class="input" type="number" step="0.01" min="0" name="weeklyPerBike" value="' + (s.weeklyPerBike != null ? s.weeklyPerBike : 75) + '"></label>' +
+      '<label>Minimum bikes per client booking<input class="input" type="number" step="1" min="1" name="minBikes" value="' + (s.minBikes || 5) + '"></label></div>' +
       '<label class="check"><input type="checkbox" name="pricesAreSamples"' + (s.pricesAreSamples ? ' checked' : '') + '> Still sample prices (shows a "sample prices" note to clients)</label>' +
       '<div class="row-end"><button class="btn primary">Save settings</button></div></form>' +
+      '<div class="card" id="discounts-card"></div>' +
       '<div class="card" id="paymethods-card"></div>' +
       '<div class="card" id="homevideo-card"></div>' +
       '<div class="card" id="homecontent-card"></div>' +
       '<div class="card"><h2>GPS trackers</h2><p>Status: <strong>' + (TrackerFeed.isLive() ? 'Live' : 'Simulator (demo positions)') + '</strong></p><p class="muted">When you tell us the tracker brand (or the app you use to see them), we connect its live feed here. Each bike is matched by its tracker ID.</p></div>' +
-      '<div class="card"><h2>Demo data</h2><p class="muted">In this first version everything is saved in this browser only, so each phone or computer has its own copy. A shared database comes next.</p><button class="btn danger-ghost" id="reset">Reset demo data</button></div></section>';
+      '<div class="card" id="store-card"><h2>Where the data is saved</h2>' + (Data.mode() === 'database' ? '<p><strong>Shared database (connected).</strong> Every phone and computer sees the same accounts, bikes, bookings and money records.</p>' : '<p><strong>This browser only (test mode).</strong> The shared database is not connected yet, so each phone or computer has its own copy. It switches on when the Supabase keys are added to js/config.js.</p><button class="btn danger-ghost" id="reset">Clear this browser\'s copy</button>') + '</div></section>';
+    discountsAdmin($('#discounts-card', root)); // Nov 8 2026: price table discounts
     payAdmin($('#paymethods-card', root)); // v4.1: card / Google Pay / Apple Pay / Zelle
     if (window.HomeVideo) HomeVideo.renderAdmin($('#homevideo-card', root)); // v4: main page video upload
     if (window.HomePage) HomePage.renderAdmin($('#homecontent-card', root)); // v4: main page stats, reviews, story, contact
@@ -442,10 +516,11 @@
       e.preventDefault(); const f = e.target;
       const priceChanged = +f.setupFeePerBike.value !== +s.setupFeePerBike || +f.weeklyPerBike.value !== +s.weeklyPerBike;
       Data.saveSettings({ businessName: f.businessName.value.trim() || 'Media on Wheels', pricePerBikeDay: +f.pricePerBikeDay.value || 0, depositPct: Math.min(100, Math.max(0, +f.depositPct.value || 0)), openingBalance: +f.openingBalance.value || 0,
-        setupFeePerBike: Math.max(0, +f.setupFeePerBike.value || 0), weeklyPerBike: Math.max(0, +f.weeklyPerBike.value || 0), pricesAreSamples: priceChanged && s.pricesAreSamples ? false : f.pricesAreSamples.checked });
+        setupFeePerBike: Math.max(0, +f.setupFeePerBike.value || 0), weeklyPerBike: Math.max(0, +f.weeklyPerBike.value || 0), minBikes: Math.max(1, Math.round(+f.minBikes.value || 5)), pricesAreSamples: priceChanged && s.pricesAreSamples ? false : f.pricesAreSamples.checked });
       toast('Settings saved'); App.render();
     });
-    $('#reset', root).addEventListener('click', () => confirmBox('Reset demo data?', 'All bikes, bookings and transactions go back to the demo set.', 'Reset', async () => { await Data.reset(); toast('Demo data reset'); App.render(); }, true));
+    const rs = $('#reset', root); /* this-browser mode only; the shared database is never wiped from a browser */
+    if (rs) rs.addEventListener('click', () => confirmBox('Clear this browser\'s copy?', 'All accounts, bikes, bookings and money records saved in THIS browser are removed. It starts empty again.', 'Clear', async () => { await Data.reset(); toast('Cleared'); App.logout(); }, true));
   }
 
   window.AdminViews = {

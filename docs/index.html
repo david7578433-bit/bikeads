@@ -4,47 +4,137 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Media on Wheels · Ads on grocery-delivery bikes in Williamsburg &amp; Boro Park</title>
-<meta name="description" content="Media on Wheels puts your ad on the grocery-delivery bikes of Williamsburg and Boro Park. See prices and book bikes online.">
+<meta name="description" content="Put your business ad on the grocery-delivery bikes of Williamsburg and Boro Park, Brooklyn. The bikes ride 6 days a week. See prices and book bikes online.">
+<!-- SITE ADDRESS: the chosen own domain https://mediaonwheelsnyc.com/ (Nov 8 2026; not bought / not connected yet). Canonical, og:url and JSON-LD use it;
+     og:image stays on the github.io copy so link previews work today (github.io forwards to the domain once it is connected). -->
+<link rel="canonical" href="https://mediaonwheelsnyc.com/">
+<meta name="robots" content="index, follow">
+<!-- GOOGLE SEARCH CONSOLE: paste the verification tag Google gives you here, e.g.
+<meta name="google-site-verification" content="PASTE-CODE-HERE">
+-->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Media on Wheels">
+<meta property="og:title" content="Media on Wheels · Your ad, riding every street">
+<meta property="og:description" content="Ads on the grocery-delivery bikes of Williamsburg and Boro Park, 6 days a week. See prices and book bikes online.">
+<meta property="og:url" content="https://mediaonwheelsnyc.com/">
+<meta property="og:image" content="https://david7578433-bit.github.io/bikeads/media/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Media on Wheels: your ad, riding every street. Ads on the grocery-delivery bikes of Williamsburg and Boro Park.">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Media on Wheels · Your ad, riding every street">
+<meta name="twitter:description" content="Ads on the grocery-delivery bikes of Williamsburg and Boro Park, 6 days a week.">
+<meta name="twitter:image" content="https://david7578433-bit.github.io/bikeads/media/og-image.jpg">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "LocalBusiness",
+   "@id": "https://mediaonwheelsnyc.com/#business",
+   "name": "Media on Wheels",
+   "url": "https://mediaonwheelsnyc.com/",
+   "image": "https://david7578433-bit.github.io/bikeads/media/og-image.jpg",
+   "logo": "https://david7578433-bit.github.io/bikeads/icons/icon-512.png",
+   "description": "Media on Wheels puts your ad on the grocery-delivery bikes that ride the streets of Williamsburg and Boro Park, Brooklyn, 6 days a week (Sunday to Friday; the bikes do not ride on Shabbos).",
+   "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Brooklyn",
+    "addressRegion": "NY",
+    "addressCountry": "US"
+   },
+   "areaServed": [
+    {
+     "@type": "Place",
+     "name": "Williamsburg, Brooklyn, NY"
+    },
+    {
+     "@type": "Place",
+     "name": "Borough Park (Boro Park), Brooklyn, NY"
+    }
+   ],
+   "knowsAbout": [
+    "Bike advertising",
+    "Mobile billboard advertising",
+    "Local advertising in Williamsburg and Boro Park"
+   ]
+  },
+  {
+   "@type": "Service",
+   "@id": "https://mediaonwheelsnyc.com/#service",
+   "name": "Ads on grocery-delivery bikes",
+   "serviceType": "Mobile bike advertising",
+   "provider": {
+    "@id": "https://mediaonwheelsnyc.com/#business"
+   },
+   "areaServed": [
+    {
+     "@type": "Place",
+     "name": "Williamsburg, Brooklyn, NY"
+    },
+    {
+     "@type": "Place",
+     "name": "Borough Park (Boro Park), Brooklyn, NY"
+    }
+   ],
+   "description": "Your business ad printed on the grocery-delivery bikes of Williamsburg and Boro Park. The bikes ride 6 days a week, Sunday to Friday (not on Shabbos). Book bikes online by the week.",
+   "url": "https://mediaonwheelsnyc.com/"
+  },
+  {
+   "@type": "WebSite",
+   "@id": "https://mediaonwheelsnyc.com/#website",
+   "name": "Media on Wheels",
+   "url": "https://mediaonwheelsnyc.com/",
+   "publisher": {
+    "@id": "https://mediaonwheelsnyc.com/#business"
+   }
+  }
+ ]
+}
+</script>
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Media on Wheels">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="styles.css?v=8">
-<link rel="stylesheet" href="deliver.css?v=8">
+<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="deliver.css?v=11">
 <link rel="preload" href="fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="theme.css?v=8">
+<link rel="stylesheet" href="theme.css?v=11">
 <link rel="preload" href="fonts/dm-serif-display-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="light.css?v=9">
+<link rel="stylesheet" href="light.css?v=11">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <div id="app"><main class="auth home v4 mow"><header class="lnav"><span class="brand">Media on Wheels</span></header><div class="lpanel"><section class="home-hero"><div class="hero-video"><div class="hero-copy"><h1>Your ad, riding every street</h1><p>Ads on the grocery-delivery bikes of Williamsburg and Boro Park.</p><noscript><p>This site needs JavaScript turned on.</p></noscript></div></div></section></div></main></div>
-<script src="js/config.js?v=8"></script>
+<script src="js/config.js?v=11"></script>
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/qrcode/qrcode.js"></script>
-<script src="js/deliver-core.js?v=8"></script>
-<script src="js/deliver-seed.js?v=8"></script>
-<script src="js/data.js?v=8"></script>
-<script src="js/trackers.js?v=8"></script>
+<script src="js/deliver-core.js?v=11"></script>
+<script src="js/deliver-seed.js?v=11"></script>
+<script src="js/data.js?v=11"></script>
+<script src="js/auth.js?v=11"></script>
+<script src="js/trackers.js?v=11"></script>
 <script src="vendor/hebcal/hebcal.min.js"></script>
-<script src="js/jcal.js?v=8"></script>
-<script src="js/ui.js?v=8"></script>
-<script src="js/deliver.js?v=8"></script>
-<script src="js/deliver-ui.js?v=8"></script>
-<script src="js/homevideo.js?v=8"></script>
-<script src="js/home.js?v=8"></script>
-<script src="js/admin.js?v=8"></script>
-<script src="js/platform.js?v=8"></script>
-<script src="js/williamsburg-streets.js?v=8"></script>
-<script src="js/bikeride.js?v=8"></script>
-<script src="js/client.js?v=8"></script>
-<script src="js/driver.js?v=8"></script>
-<script src="js/store.js?v=8"></script>
-<script src="js/boss.js?v=8"></script>
-<script src="js/app.js?v=8"></script>
+<script src="js/jcal.js?v=11"></script>
+<script src="js/ui.js?v=11"></script>
+<script src="js/deliver.js?v=11"></script>
+<script src="js/deliver-ui.js?v=11"></script>
+<script src="js/homevideo.js?v=11"></script>
+<script src="js/home.js?v=11"></script>
+<script src="js/admin.js?v=11"></script>
+<script src="js/platform.js?v=11"></script>
+<script src="js/williamsburg-streets.js?v=11"></script>
+<script src="js/bikeride.js?v=11"></script>
+<script src="js/client.js?v=11"></script>
+<script src="js/driver.js?v=11"></script>
+<script src="js/store.js?v=11"></script>
+<script src="js/boss.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
 </body>
 </html>
