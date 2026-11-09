@@ -13,6 +13,7 @@
   const STORAGE_KEY = 'mow.prod.v2'; /* was 'bikeads.v1' (demo data, left untouched in old browsers, no longer read) */
   const COLLECTIONS = ['users', 'locations', 'bikes', 'bookings', 'transactions', 'reconciliations',
     /* Nov 8 2026: price discounts (admin price table) */ 'discounts',
+    /* Nov 8 2026: "Leave feedback" and "Request a call" (admin reads them in the Inbox tab) */ 'feedback', 'callRequests',
     /* BikeAds Deliver plugin */ 'stores', 'drivers', 'orders', 'smslog', 'shifts', 'invoices', 'payouts'];
 
   const LocalAdapter = {

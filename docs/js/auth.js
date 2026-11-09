@@ -84,6 +84,11 @@
         const row = Object.assign({}, r.data, { id: r.id });
         st[r.collection].push(row); snap[r.collection].set(r.id, key(forSave(r.collection, row)));
       });
+      if (profile.role === 'admin') { /* Nov 8 2026: "Leave feedback" and "Request a call" (tables mow_feedback, mow_call_requests; only the admin can read them) */
+        const [fb, cr] = await Promise.all([sb.from('mow_feedback').select('*').order('created_at', { ascending: false }), sb.from('mow_call_requests').select('*').order('created_at', { ascending: false })]);
+        st.feedback = fb.error ? [] : (fb.data || []).map(fromFeedback);
+        st.callRequests = cr.error ? [] : (cr.data || []).map(fromCallRequest);
+      }
       if (profile.role !== 'admin') { /* other clients' bookings: only which bikes are taken on which days, no names */
         const holds = await sb.rpc('mow_bike_holds');
         if (!holds.error) (holds.data || []).forEach((h) => {
@@ -107,6 +112,11 @@
     const gone = Array.from(before.keys()).filter((id) => !seen.has(id));
     if (gone.length) { const res = await sb.from('mow_discounts').delete().in('id', gone); if (res.error) throw res.error; gone.forEach((id) => before.delete(id)); }
   }
+
+  /* Feedback and call requests: sent straight to their own tables (anyone may send one; only the admin reads them). */
+  const fromFeedback = (r) => ({ id: r.id, createdAt: r.created_at, siteStars: r.site_stars, siteComment: r.site_comment || '', serviceStars: r.service_stars, serviceComment: r.service_comment || '', name: r.name || '', email: r.email || '', source: r.source || '', bookingId: r.booking_id || '', userId: r.user_id || '' });
+  const fromCallRequest = (r) => ({ id: r.id, createdAt: r.created_at, name: r.name || '', phone: r.phone || '', bestTime: r.best_time || '', note: r.note || '', userId: r.user_id || '', called: !!r.called, calledAt: r.called_at || null });
+  const stars = (n) => (n >= 1 && n <= 5 ? Math.round(n) : null);
 
   async function save(name, all) {
     if (!sb || !profile) return;
@@ -263,6 +273,20 @@
       if (res.error) throw new Error(friendly(res.error));
       const row = Array.isArray(res.data) ? res.data[0] : res.data;
       return row ? fromDiscount(row) : null;
+    },
+    /* Nov 8 2026: "Leave feedback" / "Request a call". Database mode: one insert each (no reading back: visitors cannot read these tables). */
+    async sendFeedback(f) {
+      const res = await sb.from('mow_feedback').insert({ site_stars: stars(f.siteStars), site_comment: f.siteComment || '', service_stars: stars(f.serviceStars), service_comment: f.serviceComment || '',
+        name: f.name || '', email: f.email || '', source: f.source || '', booking_id: f.bookingId || '', user_id: profile ? profile.id : null });
+      if (res.error) throw new Error(friendly(res.error));
+    },
+    async sendCallRequest(c) {
+      const res = await sb.from('mow_call_requests').insert({ name: c.name, phone: c.phone, best_time: c.bestTime || '', note: c.note || '', user_id: profile ? profile.id : null });
+      if (res.error) throw new Error(friendly(res.error));
+    },
+    async setCalled(id, called) {
+      const res = await sb.from('mow_call_requests').update({ called: !!called, called_at: called ? new Date().toISOString() : null }).eq('id', id);
+      if (res.error) throw new Error(friendly(res.error));
     },
     friendly
   };

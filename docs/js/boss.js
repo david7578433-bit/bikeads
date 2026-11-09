@@ -17,7 +17,7 @@
     Data.list('bikes').forEach((b) => {
       if (!b.position || (view.area && b.locationId !== view.area)) return;
       L.marker([b.position.lat, b.position.lng], { icon: L.divIcon({ className: 'd-ico', html: '<div class="d-bike">' + esc(b.number) + '</div>', iconSize: [24, 24], iconAnchor: [12, 12] }), zIndexOffset: -100 })
-        .bindPopup('<strong>Ad bike #' + esc(b.number) + '</strong><div class="small muted">' + esc(b.advertiser || '') + ' · tracker ' + esc(b.trackerId) + '</div>').addTo(bikeLayer);
+        .bindPopup('<strong>Ad bike #' + esc(b.number) + '</strong><div class="small muted">' + esc(b.advertiser || '') + ' · ' + (b.trackerId ? 'tracker ' + esc(b.trackerId) : 'no tracker yet') + '</div>').addTo(bikeLayer);
     });
   }
 

@@ -21,6 +21,8 @@
 --   mow_discounts     the admin's price-table discounts (by bikes, by weeks, promo code, one client)
 --   mow_records       everything else the app saves (bikes, service areas, bookings, transactions, …), one row
 --                     per record, JSON data, owner_id = the client a booking belongs to
+--   mow_feedback      "Leave feedback": stars + comment on the website and on our service (anyone sends, admin reads)
+--   mow_call_requests "Request a call": name, phone, best time, note; admin marks it called (anyone sends, admin reads)
 -- Row Level Security: a client sees and changes only their own profile and their own bookings; everyone can see
 -- bikes and service areas (so the booking calendar works) and, through mow_bike_holds(), WHICH bikes are taken on
 -- which days — but never other clients' names, prices or contact details. The admin sees and changes everything.
@@ -315,6 +317,72 @@ grant select, update, delete on public.mow_profiles to authenticated;
 grant select, insert, update, delete on public.mow_admin_emails to authenticated;
 grant select on public.mow_discounts to anon, authenticated;
 grant insert, update, delete on public.mow_discounts to authenticated;
+
+-- ---------- Nov 8, 2026: "Leave feedback" and "Request a call" (David) ----------
+-- Anyone (also a visitor who is not signed in) can SEND one; only the admin can read them. No public display.
+-- Nothing here sends an email or a text.
+create table if not exists public.mow_feedback (
+  id               uuid primary key default gen_random_uuid(),
+  created_at       timestamptz not null default now(),
+  site_stars       smallint check (site_stars is null or site_stars between 1 and 5),       -- the website, 1–5
+  site_comment     text not null default '' check (char_length(site_comment) <= 1000),
+  service_stars    smallint check (service_stars is null or service_stars between 1 and 5), -- our service ("how good we are"), 1–5
+  service_comment  text not null default '' check (char_length(service_comment) <= 1000),
+  name             text not null default '' check (char_length(name) <= 120),
+  email            text not null default '' check (char_length(email) <= 200),
+  source           text not null default '' check (char_length(source) <= 40),             -- where it was sent from: home, booking, account
+  booking_id       text not null default '' check (char_length(booking_id) <= 80),
+  user_id          uuid default auth.uid(),
+  constraint mow_feedback_not_empty check (site_stars is not null or service_stars is not null or site_comment <> '' or service_comment <> '')
+);
+comment on table public.mow_feedback is 'Media on Wheels: feedback on the website and on the service. Anyone can send; only the admin reads.';
+
+create table if not exists public.mow_call_requests (
+  id          uuid primary key default gen_random_uuid(),
+  created_at  timestamptz not null default now(),
+  name        text not null check (char_length(name) between 1 and 120),
+  phone       text not null check (char_length(phone) between 7 and 40),
+  best_time   text not null default '' check (char_length(best_time) <= 120),
+  note        text not null default '' check (char_length(note) <= 500),
+  user_id     uuid default auth.uid(),
+  called      boolean not null default false,
+  called_at   timestamptz
+);
+comment on table public.mow_call_requests is 'Media on Wheels: "Request a call" form. Anyone can send; only the admin reads and marks them called.';
+
+alter table public.mow_feedback      enable row level security;
+alter table public.mow_call_requests enable row level security;
+
+do $$
+begin
+  -- anyone may add one (a signed-in person only under their own id); new call requests always start "not called"
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'mow_feedback' and policyname = 'mow_feedback_insert') then
+    create policy mow_feedback_insert on public.mow_feedback for insert to anon, authenticated with check (user_id is null or user_id = auth.uid());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'mow_feedback' and policyname = 'mow_feedback_admin_read') then
+    create policy mow_feedback_admin_read on public.mow_feedback for select to authenticated using (public.mow_is_admin());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'mow_feedback' and policyname = 'mow_feedback_admin_delete') then
+    create policy mow_feedback_admin_delete on public.mow_feedback for delete to authenticated using (public.mow_is_admin());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'mow_call_requests' and policyname = 'mow_call_requests_insert') then
+    create policy mow_call_requests_insert on public.mow_call_requests for insert to anon, authenticated with check ((user_id is null or user_id = auth.uid()) and called = false and called_at is null);
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'mow_call_requests' and policyname = 'mow_call_requests_admin_read') then
+    create policy mow_call_requests_admin_read on public.mow_call_requests for select to authenticated using (public.mow_is_admin());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'mow_call_requests' and policyname = 'mow_call_requests_admin_update') then
+    create policy mow_call_requests_admin_update on public.mow_call_requests for update to authenticated using (public.mow_is_admin()) with check (public.mow_is_admin());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'mow_call_requests' and policyname = 'mow_call_requests_admin_delete') then
+    create policy mow_call_requests_admin_delete on public.mow_call_requests for delete to authenticated using (public.mow_is_admin());
+  end if;
+end $$;
+
+grant insert on public.mow_feedback to anon, authenticated;
+grant select, delete on public.mow_feedback to authenticated;
+grant insert on public.mow_call_requests to anon, authenticated;
+grant select, update, delete on public.mow_call_requests to authenticated;
 
 -- ---------- David is admin (also if he already signed in before this file was run) ----------
 update public.mow_profiles set role = 'admin' where lower(email) = 'david7578433@gmail.com' and role <> 'admin';

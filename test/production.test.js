@@ -152,8 +152,9 @@ test('client booking: minimum 5 bikes, map preview taken off the "Your business"
 
 test('clean client calendar: no holiday labels or list, Shabbos blocked, Hebrew date kept', () => {
   const c = read('js/client.js'), u = read('js/ui.js');
-  assert.match(c, /holidays: false, labels: false/); assert.match(c, /\|\| isShabbos\(ds\)/);
-  assert.match(u, /ev && o\.labels !== false \?/); assert.match(u, /cal-hd/);
+  assert.match(c, /\|\| isShabbos\(ds\)/); assert.match(u, /cal-hd/);
+  // Nov 8 2026 (David, 4:37 PM): holidays are only a tiny dot + one small line, on every calendar (see test/nov8-david.test.js)
+  assert.ok(!u.includes('hol-list') && !u.includes('cal-legend'), 'no holiday list or legend'); assert.match(u, /cal-dot/);
 });
 
 test('price step: discounts from the admin price table, 20% deposit now, balance later', async () => {

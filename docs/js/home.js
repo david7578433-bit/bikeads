@@ -1,5 +1,5 @@
 /* Media on Wheels v4 — the open main page (no login needed) and its editor in Admin → Settings.
- * Order: video + headline → What we do → How it works → Prices → Videos → Reach → Feedback → Why us → Our story → Contact / Book.
+ * Order: video + headline → What we do → How it works → Prices → Reach (Videos section taken off Nov 8 2026) → Feedback → Why us → Our story → Contact / Book.
  * Numbers, reviews and the story start as clearly marked SAMPLES; the owner replaces them in
  * Admin → Settings → "Main page content". Nothing on this page is presented as a real fact until he does. */
 (function () {
@@ -48,17 +48,23 @@
   function nav(user) {
     const right = user ? '<a class="btn primary pill lnav-cta" href="#/' + user.role + '">My account</a>' : '<a class="btn primary pill lnav-cta" href="#/login">Log in</a>';
     return '<header class="lnav"><a class="brand" href="#/" data-jump="top">' + logo + esc(brand()) + '</a>' +
-      '<nav class="lnav-links" aria-label="Main page"><a href="#what" data-jump="what">What we do</a><a href="#prices" data-jump="prices">Prices</a><a href="#videos" data-jump="videos">Videos</a><a href="#feedback" data-jump="feedback">Feedback</a><a href="#contact" data-jump="contact">Contact</a></nav>' +
-      right + '</header>';
+      '<nav class="lnav-links" aria-label="Main page"><a href="#what" data-jump="what">What we do</a><a href="#prices" data-jump="prices">Prices</a><a href="#feedback" data-jump="feedback">Feedback</a><a href="#contact" data-jump="contact">Contact</a></nav>' +
+      '<button type="button" class="btn ghost pill lnav-call" data-callreq="home-header" aria-label="Request a call"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg><span class="lc-t">Request a call</span></button>' + right + '</header>';
   }
 
-  function hero(c) {
+  function hero(c, user) {
     return '<section class="home-hero" id="top" aria-labelledby="hero-h"><div class="hero-video">' +
       '<video id="hero-video" muted loop playsinline aria-hidden="true" tabindex="-1" poster="' + HomeVideo.DEFAULT.poster + '"></video><div class="hero-fade" aria-hidden="true"></div>' +
       '<div class="hero-copy"><span class="hero-kicker">Williamsburg &amp; Boro Park</span>' +
       '<h1 id="hero-h">' + esc(c.headline) + '</h1><p>' + esc(c.subline) + '</p>' +
-      '<div class="hero-cta"><a class="btn primary big pill" href="#/login/book" data-book>Book bikes</a><a class="btn big pill white" href="#prices" data-jump="prices">See prices</a></div></div>' +
+      '<div class="hero-cta">' + bookOrJoin(user, 'btn primary big pill') + '<a class="btn big pill white" href="#prices" data-jump="prices">See prices</a></div></div>' +
       '<span class="video-credit" id="video-credit" hidden></span></div></section>';
+  }
+
+  /* Nov 8 2026 (David): "Only if you are signed in can you press Book Bikes". Signed out: "Create an account" instead. */
+  function bookOrJoin(user, cls, short) {
+    if (!user) return '<a class="' + cls + '" href="#/signup">' + (short ? 'Create account' : 'Create an account') + '</a>';
+    return '<a class="' + cls + '" href="#/' + (user.role === 'client' ? 'client/book' : user.role) + '" data-book>Book bikes</a>';
   }
 
   function head(id, h, p) { return '<div class="sec-head"><h2 id="' + id + '-h">' + h + '</h2>' + (p ? '<p>' + p + '</p>' : '') + '</div>'; }
@@ -79,7 +85,7 @@
       '<div class="grid3">' + steps.map(([n, h, p]) => '<div class="tile"><span class="how-n">' + n + '</span><h3>' + h + '</h3><p>' + p + '</p></div>').join('') + '</div></section>';
   }
 
-  function prices() {
+  function prices(user) {
     const s = Data.settings();
     const setup = +s.setupFeePerBike || 0, weekly = +s.weeklyPerBike || 0;
     const ex = 5 * setup + 5 * weekly * 4;
@@ -89,7 +95,7 @@
       '<div class="tile price"><span class="price-k">Printing &amp; setup</span><span class="price-v">' + money(setup) + '</span><span class="price-u">per bike, one time</span></div>' +
       '<div class="tile price"><span class="price-k">Weekly</span><span class="price-v">' + money(weekly) + '</span><span class="price-u">per bike, per week</span></div>' +
       '<div class="tile price ex"><span class="price-k">Example</span><span class="price-v">' + money(ex) + '</span><span class="price-u">5 bikes for 4 weeks, all in</span></div></div>' +
-      '<div class="sec-cta"><a class="btn primary big pill" href="#/login/book" data-book>Book bikes</a></div></section>';
+      '<div class="sec-cta">' + bookOrJoin(user, 'btn primary big pill') + '</div></section>';
   }
 
   function videos(c) {
@@ -127,22 +133,24 @@
       esc(c.story).split(/\n\s*\n/).map((p) => '<p>' + p + '</p>').join('') + '</div></section>';
   }
 
-  function contact(c) {
+  function contact(c, user) {
     const lines = [];
     if (c.contactPhone) lines.push('<a class="btn big pill white" href="tel:' + esc(c.contactPhone.replace(/[^\d+]/g, '')) + '">Call ' + esc(c.contactPhone) + '</a>');
     if (c.contactEmail) lines.push('<a class="btn big pill white" href="mailto:' + esc(c.contactEmail) + '">' + esc(c.contactEmail) + '</a>');
     return '<section class="sec book-sec" id="contact" aria-labelledby="contact-h"><div class="book-panel">' +
       '<h2 id="contact-h">Ready to put your ad on the street?</h2><p>Pick your dates and bikes, see the price, and book online.</p>' +
-      '<div class="hero-cta center"><a class="btn primary big pill" href="#/login/book" data-book>Book bikes</a><a class="btn big pill white" href="#/signup">Create an account</a></div>' +
-      (lines.length ? '<div class="contact-lines">' + lines.join('') + '</div>' : '') + '</div></section>';
+      '<div class="hero-cta center">' + (!user || user.role === 'admin' ? (user ? bookOrJoin(user, 'btn primary big pill') : '') + '<a class="btn big pill ' + (user ? 'white' : 'primary') + '" href="#/signup">Create an account</a>' : bookOrJoin(user, 'btn primary big pill')) + '</div>' +
+      (lines.length ? '<div class="contact-lines">' + lines.join('') + '</div>' : '') +
+      /* Nov 8 2026 (David): Request a call + Leave feedback */
+      '<div class="contact-more"><button type="button" class="btn big pill white" data-callreq="home-contact">Request a call</button><button type="button" class="btn big pill white" data-feedback="home">Leave feedback</button></div></div></section>';
   }
 
   function foot() {
-    return '<footer class="lfoot"><span>' + logo + esc(brand()) + '</span><span class="muted small">Main video: <a href="' + HomeVideo.DEFAULT.creditUrl + '" target="_blank" rel="noopener">' + esc(HomeVideo.DEFAULT.credit) + '</a></span><a href="#/login">Log in</a></footer>';
+    return '<footer class="lfoot"><span>' + logo + esc(brand()) + '</span><span class="muted small">Main video: <a href="' + HomeVideo.DEFAULT.creditUrl + '" target="_blank" rel="noopener">' + esc(HomeVideo.DEFAULT.credit) + '</a></span><span class="lfoot-links"><button type="button" class="linkish" data-feedback="home">Leave feedback</button><button type="button" class="linkish" data-callreq="home-footer">Request a call</button><a href="#/login">Log in</a></span></footer>';
   }
 
-  function dock() {
-    return '<nav class="dock" aria-label="Quick links"><a class="dock-btn d-blue" href="#/login/book" data-book>Book bikes</a>' +
+  function dock(user) {
+    return '<nav class="dock" aria-label="Quick links">' + bookOrJoin(user, 'dock-btn d-blue', true) +
       '<a class="dock-btn d-sun" href="#prices" data-jump="prices">Prices</a><a class="dock-btn d-rose" href="#contact" data-jump="contact">Contact</a></nav>';
   }
 
@@ -151,7 +159,7 @@
     render(app, user) {
       const c = content();
       document.title = brand() + ' · Ads on grocery-delivery bikes in Williamsburg & Boro Park';
-      app.innerHTML = '<main class="auth home v4 mow">' + nav(user) + '<div class="lpanel">' + hero(c) + what() + how() + prices() + videos(c) + reach(c) + feedback(c) + why() + story(c) + contact(c) + '</div>' + foot() + dock() + '</main>';
+      app.innerHTML = '<main class="auth home v4 mow">' + nav(user) + '<div class="lpanel">' + hero(c, user) + what() + how() + prices(user) + /* Nov 8 2026 (David: "take this down"): no Videos section */ reach(c) + feedback(c) + why() + story(c) + contact(c, user) + '</div>' + foot() + dock(user) + '</main>';
       if (window.HomeVideo) HomeVideo.mount($('#hero-video'), $('#video-credit'));
       $$('[data-jump]', app).forEach((l) => l.addEventListener('click', (e) => {
         const t = document.getElementById(l.getAttribute('data-jump')); if (!t) return;
@@ -164,6 +172,7 @@
         const phone = window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
         ride = BikeRide.mount(host, { count: phone ? 7 : 10, labels: ADS, seed: 23, speed: phone ? 1.3 : 1.5, maxDpr: phone ? 1.5 : 2, bikeScale: 1.0, bg: '#f2f7fd' });
       };
+      if (!host) return; /* the Videos section (with the ad-bike animation) is off the page since Nov 8 2026 */
       if ('IntersectionObserver' in window) { io = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) { start(); io.disconnect(); io = null; } }, { rootMargin: '200px' }); io.observe(host); } else start();
     },
     teardown() { if (io) { io.disconnect(); io = null; } if (ride) { ride.destroy(); ride = null; } },

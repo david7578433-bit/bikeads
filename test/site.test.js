@@ -33,7 +33,7 @@ test('core features are present in the app code', () => {
   const ui = read('js/ui.js'), admin = read('js/admin.js'), client = read('js/client.js'), app = read('js/app.js');
   assert.match(ui, /flag red/); assert.match(ui, /flag blue/);
   assert.match(ui, /tile\.openstreetmap\.org/);
-  assert.match(admin, /Add tracker/); assert.match(admin, /Approve/); assert.match(admin, /Decline/);
+  assert.match(admin, /Add bike/); assert.match(admin, /Tracker ID \(IMEI\) \(optional\)/); assert.match(admin, /Approve/); assert.match(admin, /Decline/);
   assert.match(admin, /Calendar/); assert.match(admin, /List/); assert.match(admin, /Reconcile/); assert.match(admin, /Export CSV/);
   // v3 (Nov 4 2026, David's request): client books Details → Dates & bikes → Price → Payment; the map is admin-only
   assert.match(client, /Business \/ company name/); assert.match(client, /Email address/); assert.match(client, /Phone number/); assert.match(client, /Confirm booking/); assert.match(client, /Printing & setup/); assert.match(client, /Weekly charge/); assert.match(client, /Card number/);

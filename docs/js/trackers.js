@@ -34,7 +34,7 @@
           const dy = (lat - loc.lat) * METERS_PER_DEG_LAT, dx = (lng - loc.lng) * mPerDegLng;
           if (Math.hypot(dx, dy) > 700) { h = Math.atan2(-dx, -dy); lat = b.position.lat; lng = b.position.lng; }
           headings[b.id] = h;
-          updates.push({ trackerId: b.trackerId, lat, lng, at: new Date().toISOString(), source: 'sim' });
+          updates.push({ bikeId: b.id, trackerId: b.trackerId, lat, lng, at: new Date().toISOString(), source: 'sim' });
         });
         onPositions(updates);
       };
@@ -76,9 +76,9 @@
     apply(updates) {
       if (!updates.length) return;
       const byTracker = {};
-      Data.list('bikes').forEach((b) => { byTracker[b.trackerId] = b; });
+      Data.list('bikes').forEach((b) => { if (b.trackerId) byTracker[b.trackerId] = b; }); /* Nov 8 2026: a bike may have no tracker yet */
       updates.forEach((u) => {
-        const b = byTracker[u.trackerId];
+        const b = (u.bikeId && Data.bike(u.bikeId)) || (u.trackerId ? byTracker[u.trackerId] : null);
         if (!b) return;
         if (b.position && ['manual', 'phone', 'route'].includes(b.position.source) && u.source === 'sim') return;
         Data.put('bikes', { id: b.id, position: { lat: u.lat, lng: u.lng, at: u.at, source: u.source } }, { silent: true });

@@ -64,11 +64,11 @@
   function renderBikes(root) {
     const bikes = Data.list('bikes').sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
     const locs = Data.list('locations');
-    root.innerHTML = '<section class="page"><div class="page-head"><h1>Bikes &amp; trackers</h1><button class="btn primary" id="addbike">+ Add tracker</button></div>' +
+    root.innerHTML = '<section class="page"><div class="page-head"><h1>Bikes &amp; trackers</h1><button class="btn primary" id="addbike">+ Add bike</button></div>' +
       simNotice() +
       '<div class="cards">' + bikes.map((b) => {
         const loc = locs.find((l) => l.id === b.locationId);
-        return '<article class="card bike-card"><div class="bike-top"><span class="num big">' + esc(b.number) + '</span><div><h3>Bike #' + esc(b.number) + '</h3><div class="muted small">Tracker ' + esc(b.trackerId) + '</div></div></div>' +
+        return '<article class="card bike-card"><div class="bike-top"><span class="num big">' + esc(b.number) + '</span><div><h3>Bike #' + esc(b.number) + '</h3><div class="muted small">' + (b.trackerId ? 'Tracker ' + esc(b.trackerId) : 'No tracker yet') + '</div></div></div>' +
           '<dl class="kv"><dt>Location</dt><dd>' + esc(loc ? loc.name : '—') + '</dd>' +
           '<dt><span class="sw red"></span> Advertiser</dt><dd>' + esc(b.advertiser || '—') + '</dd>' +
           '<dt><span class="sw blue"></span> Marketing</dt><dd>' + esc(b.marketing || '—') + '</dd>' +
@@ -93,8 +93,9 @@
     const nextNum = String(Data.list('bikes').reduce((m, x) => Math.max(m, parseInt(x.number, 10) || 0), 0) + 1).padStart(2, '0');
     const advertisers = Array.from(new Set(Data.list('bikes').map((x) => x.advertiser).concat(Data.list('users').filter((u) => u.role === 'client').map((u) => u.company)).filter(Boolean)));
     const marketers = Array.from(new Set(Data.list('bikes').map((x) => x.marketing).filter(Boolean)));
-    const m = modal(b ? 'Edit bike #' + b.number : 'Add a tracker', '<form id="bikeform" class="form">' +
-      '<label>Tracker ID (IMEI)<input class="input" name="trackerId" required inputmode="numeric" value="' + esc(b ? b.trackerId : '') + '" placeholder="e.g. 864512040318200"></label>' +
+    const m = modal(b ? 'Edit bike #' + b.number : 'Add a bike', '<form id="bikeform" class="form">' +
+      /* Nov 8 2026 (David: "We don't have trackers right now so don't force me to put in a tracking number"): optional */
+      '<label>Tracker ID (IMEI) (optional)<input class="input" name="trackerId" inputmode="numeric" value="' + esc(b ? b.trackerId || '' : '') + '" placeholder="Leave empty if the bike has no tracker yet"></label>' +
       '<label>Bike number<input class="input" name="number" required value="' + esc(b ? b.number : nextNum) + '"></label>' +
       '<label>Location<select class="select" name="locationId">' + locs.map((l) => '<option value="' + l.id + '"' + (b && b.locationId === l.id ? ' selected' : '') + '>' + esc(l.name) + '</option>').join('') + '</select></label>' +
       '<label><span><span class="sw red"></span> Red flag: advertising company</span><input class="input" name="advertiser" list="dl-adv" value="' + esc(b ? b.advertiser : '') + '"></label>' +
@@ -107,13 +108,14 @@
       e.preventDefault();
       const fd = Object.fromEntries(new FormData(e.target).entries());
       Object.keys(fd).forEach((k) => { fd[k] = String(fd[k]).trim(); });
-      const clash = Data.list('bikes').find((x) => x.id !== (b && b.id) && (x.trackerId === fd.trackerId || x.number === fd.number));
-      if (clash) { toast(clash.trackerId === fd.trackerId ? 'That tracker ID is already on bike #' + clash.number : 'Bike number already used'); return; }
+      if (!fd.number) { toast('Please type the bike number'); return; }
+      const clash = Data.list('bikes').find((x) => x.id !== (b && b.id) && ((fd.trackerId && x.trackerId === fd.trackerId) || x.number === fd.number));
+      if (clash) { toast(fd.trackerId && clash.trackerId === fd.trackerId ? 'That tracker ID is already on bike #' + clash.number : 'Bike number already used'); return; }
       const rec = Object.assign({}, b ? { id: b.id } : {}, fd);
       const loc = Data.get('locations', fd.locationId);
       if (!b || !b.position || b.locationId !== fd.locationId) rec.position = { lat: loc.lat + (Math.random() - 0.5) * 0.004, lng: loc.lng + (Math.random() - 0.5) * 0.005, at: new Date().toISOString(), source: 'sim' };
       Data.put('bikes', rec);
-      closeModal(); toast(b ? 'Bike saved' : 'Tracker added as bike #' + fd.number); done && done();
+      closeModal(); toast(b ? 'Bike saved' : 'Bike #' + fd.number + ' added' + (fd.trackerId ? '' : ' (no tracker yet)')); done && done();
     });
   }
 
@@ -531,6 +533,8 @@
       { key: 'bikes', label: 'Bikes', icon: 'bike', render: renderBikes },
       { key: 'bookings', label: 'Bookings', icon: 'cal', render: renderBookings, badge: () => Data.list('bookings').filter((b) => b.status === 'pending').length },
       { key: 'books', label: 'Books', icon: 'book', render: renderBooks },
+      /* Nov 8 2026 (David): call requests + feedback from the site (js/feedback.js) */
+      { key: 'inbox', label: 'Inbox', icon: 'inbox', render: (root) => Inbox.renderAdmin(root), badge: () => (window.Inbox ? Inbox.waiting() : 0) },
       { key: 'settings', label: 'Settings', icon: 'gear', render: renderSettings }
     ],
     teardown

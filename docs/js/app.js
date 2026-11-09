@@ -10,6 +10,7 @@
     book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Zm0 16a2 2 0 0 1 2-2h13v2"/><path d="M9 8h6m-6 4h4"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
     list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2-8Z"/>',
     route: '<circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/>',
     scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
@@ -89,6 +90,7 @@
         if (parts[0] === 'signup') return renderSignup(app);
         if (parts[0] === 'login') return renderLogin(app, parts[1] === 'book');
         if (parts[0] === 'forgot') return renderForgot(app);
+        if (parts[0] === 'client') return renderLogin(app, true); /* Nov 8 2026: booking needs an account — a signed-out visitor on a booking link gets sign in / create account */
         return HomePage.render(app, null);
       }
       current = Data.get('users', current.id) || current;
@@ -111,6 +113,8 @@
       root.className = 'view view-' + tab.key;
       main.appendChild(root);
       tab.render(root, current, parts.slice(2));
+      /* Nov 8 2026 (David): "Leave feedback" and "Request a call" at the bottom of every client page */
+      if (role === 'client' && window.Inbox && !root.querySelector('[data-feedback]')) main.insertAdjacentHTML('beforeend', '<footer class="app-foot">' + Inbox.buttonsHtml() + '</footer>');
     }
   };
 
@@ -126,9 +130,9 @@
     return (viewing ? '<div class="viewas">Viewing as ' + esc(current.name) + ' (' + ROLE_LABEL[role] + ')<button class="mini" id="viewas-back">Back to Admin</button></div>' : '') +
       '<div class="netbar" id="netbar" role="status" hidden>No signal — everything you do is saved on this phone.</div>' +
       '<header class="top' + (dl ? ' deliver' : '') + '"><a class="brand" href="#/' + role + '/' + tabs[0].key + '"><span class="logo" aria-hidden="true"><i class="lf r"></i><i class="lf b"></i></span>' + esc(s.businessName || 'Media on Wheels') + (dl ? '<span class="brand-sub">Deliver</span>' : '') + '</a>' +
-      '<span class="role-pill ' + role + '">' + ROLE_LABEL[role] + '</span>' +
+      (role === 'client' ? '' : '<span class="role-pill ' + role + '">' + ROLE_LABEL[role] + '</span>') + /* Nov 8 2026 (David): no "Client" badge; Admin keeps its badge */
       '<nav class="tabs desk" aria-label="Main">' + nav + '</nav>' +
-      '<div class="who"><span class="who-name">' + esc(current.name) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span><button class="btn ghost small-btn" id="logout">' + (viewing ? 'Back' : 'Log out') + '</button></div></header>' +
+      '<div class="who">' + (role === 'client' ? '<a class="btn ghost small-btn" href="#/home" id="gohome">Home</a>' : '') + /* Nov 8 2026: signed-in clients can open the main page */ '<span class="who-name">' + esc(current.name) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span><button class="btn ghost small-btn" id="logout">' + (viewing ? 'Back' : 'Log out') + '</button></div></header>' +
       '<main id="main" tabindex="-1"></main>' +
       '<nav class="tabs mob" aria-label="Main">' + nav + '</nav>';
   }

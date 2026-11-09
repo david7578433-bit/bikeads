@@ -107,7 +107,7 @@
     }
     function popupHtml(b) {
       const f = flags.get(b.id), loc = Data.get('locations', b.locationId);
-      return '<div class="pop"><strong>Bike #' + esc(b.number) + '</strong><div class="muted small">' + esc(loc ? loc.name : '') + ' · tracker ' + esc(b.trackerId) + '</div>' +
+      return '<div class="pop"><strong>Bike #' + esc(b.number) + '</strong><div class="muted small">' + esc(loc ? loc.name : '') + ' · ' + (b.trackerId ? 'tracker ' + esc(b.trackerId) : 'no tracker yet') + '</div>' +
         '<div class="pop-row"><span class="sw red"></span><span class="grow">' + esc(b.advertiser || '—') + '</span><button class="mini" data-pop-toggle="red" data-bike="' + b.id + '">' + (f.red ? 'Down ▼' : 'Up ▲') + '</button></div>' +
         '<div class="pop-row"><span class="sw blue"></span><span class="grow">' + esc(b.marketing || '—') + '</span><button class="mini" data-pop-toggle="blue" data-bike="' + b.id + '">' + (f.blue ? 'Down ▼' : 'Up ▲') + '</button></div>' +
         '<div class="muted small">' + (b.position.source === 'manual' ? 'Placed by hand' : b.position.source === 'live' ? 'Live GPS' : b.position.source === 'phone' ? 'Delivery driver · phone GPS' : b.position.source === 'route' ? 'Delivery driver · on route (demo)' : 'Simulated position') + ' · ' + ago(b.position.at) + '</div>' +
@@ -218,6 +218,9 @@
 
   /* ---------- month calendar (v3: English + Hebrew/Yiddish dates, Yom Tov, Shabbos) ---------- */
   const DOW_HE = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש״ק'];
+  /* the day's holiday that gets the small dot: Yom Tov, Chol Hamoed, Chanukah/Purim, fasts, Rosh Chodesh, Erev Yom Tov (not parsha / minor days) */
+  const HOL_KINDS = ['yt', 'chm', 'fest', 'fast', 'rc', 'erev'];
+  function holOf(jd) { return (jd && (jd.events || []).find((e) => HOL_KINDS.includes(e.kind))) || null; }
   function calendarHtml(year, month, o) {
     o = o || {};
     const J = window.JCal && window.JCal.ready ? window.JCal : null;
@@ -235,33 +238,27 @@
       const inRange = o.rangeStart && ds >= o.rangeStart && ds <= (o.rangeEnd || o.rangeStart);
       const jd = J ? J.day(ds) : null;
       const ev = jd && jd.events[0];
+      const hev = holOf(jd); /* Nov 8 2026 (David): a normal calendar, a holiday is only a tiny dot on its day */
       const cls = ['cal-cell', ds === t ? 'today' : '', dis ? 'disabled' : '', inRange ? 'in-range' : '', ds === o.rangeStart ? 'range-start' : '', ds === o.rangeEnd ? 'range-end' : '', ds < t ? 'past' : '',
-        jd && jd.shabbos ? 'shab' : '', o.labels !== false && ev && (ev.kind === 'yt' || ev.kind === 'fest') ? 'k-' + ev.kind + '-day' : ''].join(' ');
+        jd && jd.shabbos ? 'shab' : '', hev ? 'hol-day' : ''].join(' ');
       let title = '';
       if (jd) title = jd.heFull + ' · ' + jd.enHeb + (jd.shabbos ? ' · Shabbos' + (jd.parsha ? ' ' + jd.parsha.en.replace(/^Parshas /, '') : '') : '') + jd.events.map((e) => ' · ' + e.en).join('');
       const hd = jd ? '<span class="cal-hd" lang="he">' + esc(jd.heDay) + ((jd.hebDayNum === 1 || d === 1) ? ' <span class="hm">' + esc(jd.heMonth) + '</span>' : '') + '</span>' : '';
-      const hol = ev && o.labels !== false ? '<span class="cal-hol k-' + ev.kind + '">' + esc(ev.en) + '</span>' : ''; /* o.labels false = clean (client booking, Nov 8 2026) */
+      const hol = hev ? '<span class="cal-dot" aria-hidden="true"></span>' : '';
       html += '<div class="' + cls + '" role="gridcell" data-date="' + ds + '"' + (title ? ' title="' + esc(title) + '" aria-label="' + esc(MONTHS[month] + ' ' + d + ', ' + title) + '"' : '') + (dis ? ' aria-disabled="true"' : ' tabindex="0"') + '><span class="cal-top"><span class="cal-num">' + d + '</span>' + hd + '</span>' + (o.cell ? o.cell(ds) : '') + hol + '</div>';
     }
     html += '</div>';
-    if (J && o.holidays !== false) {
-      const list = J.monthRows(year, month);
-      html += '<div class="cal-legend"><span class="cal-hol k-yt">Yom Tov</span><span class="cal-hol k-chm">Chol Hamoed</span><span class="cal-hol k-fest">Chanukah · Purim</span><span class="cal-hol k-fast">Fast</span><span class="cal-hol k-rc">Rosh Chodesh</span><span>Shabbos shaded</span></div>';
-      if (list.length) {
-        const short = (ds) => fmtDate(ds, { weekday: 'short', month: 'short', day: 'numeric' });
-        const day = (ds) => fmtDate(ds, { month: 'short', day: 'numeric' });
-        html += '<ul class="hol-list" aria-label="Jewish holidays this month">' + list.map((r) => {
-          const a = J.day(r.from), b = J.day(r.to);
-          const when = r.from === r.to ? short(r.from) : day(r.from) + ' – ' + fmtDate(r.to, { day: 'numeric' });
-          const heWhen = r.from === r.to ? a.heDay + ' ' + a.heMonth : a.heDay + ' ' + a.heMonth + ' – ' + b.heDay + ' ' + b.heMonth;
-          return '<li><span class="d">' + esc(when) + '</span><span class="n"><span class="cal-hol k-' + r.kind + '">' + esc(r.en) + '</span></span><span class="h" lang="he" dir="rtl">' + esc(r.he) + ' · ' + esc(heWhen) + '</span></li>';
-        }).join('') + '</ul>';
-      } else {
-        html += '<p class="small muted" style="margin-top:.5rem">No Yom Tov or fast days this month.</p>';
-      }
+    /* Nov 8 2026 (David: "a normal calendar … a small 'Today is a holiday', no big rush"): no holiday legend or list any more.
+     * One small line only: the picked day (o.rangeStart) or else today, when it is a holiday. */
+    if (J) {
+      const inMonth = (ds) => ds && ds.slice(0, 7) === year + '-' + String(month + 1).padStart(2, '0');
+      const pickEv = o.rangeStart ? holOf(J.day(o.rangeStart)) : null;
+      const todayEv = inMonth(t) ? holOf(J.day(t)) : null;
+      if (pickEv) html += '<p class="cal-note"><span class="cal-dot" aria-hidden="true"></span>This day is a holiday (' + esc(pickEv.en) + ')</p>';
+      else if (!o.rangeStart && todayEv) html += '<p class="cal-note"><span class="cal-dot" aria-hidden="true"></span>Today is a holiday (' + esc(todayEv.en) + ')</p>';
     }
     return html;
   }
 
-  window.UI = { DOW_HE, esc, money, fmtDate, fmtRange, ago, $, $$, toast, modal, closeModal, confirmBox, statusOf, badge, STATUS_LABEL, createBikeMap, mapControlsHtml, bikeListHtml, wireMapControls, calendarHtml, MONTHS, flagStore };
+  window.UI = { DOW_HE, esc, money, fmtDate, fmtRange, ago, $, $$, toast, modal, closeModal, confirmBox, statusOf, badge, STATUS_LABEL, createBikeMap, mapControlsHtml, bikeListHtml, wireMapControls, calendarHtml, holOf, MONTHS, flagStore };
 })();
