@@ -199,6 +199,12 @@
   /* ---------- public API used by app.js ---------- */
   const Auth = {
     remote: REMOTE,
+    /* Nov 8 2026: call a Supabase Edge Function (emails: "mow-send-email"). No answer / not deployed = { ok: false }. */
+    async invoke(name, body) {
+      if (!sb) return { ok: false };
+      try { const { data, error } = await sb.functions.invoke(name, { body }); if (error) return { ok: false }; return data || { ok: false }; }
+      catch (e) { return { ok: false }; }
+    },
     googleReady: REMOTE && CFG.google !== false,
     adapter() { return REMOTE ? RemoteAdapter : window.DataLocalAdapter; },
     /* Start: in database mode load supabase-js, finish a Google / email-link sign-in if the URL carries one,

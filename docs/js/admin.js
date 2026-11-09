@@ -148,7 +148,7 @@
 
   function bookingRow(b) {
     const s = statusOf(b);
-    return '<div class="bk-row"><div class="bk-main"><div class="bk-title"><strong>' + esc(b.company) + '</strong> ' + badge(b) + '</div>' +
+    return '<div class="bk-row"><div class="bk-main"><div class="bk-title"><strong>' + esc(b.company) + '</strong> ' + (b.requestOnly && s === 'pending' ? '<span class="badge st-pending">Requested</span>' : badge(b)) + (b.requestOnly && b.status === 'approved' && !b.depositPaid ? ' <span class="badge st-pending">Deposit not paid yet</span>' : '') + '</div>' +
       '<div class="small">' + fmtRange(b.start, b.end) + ' · ' + Data.days(b.start, b.end) + ' days · ' + b.bikeIds.length + ' bikes (' + b.bikeIds.map(Data.bikeLabel).join(', ') + ')' + (b.mode === 'count' ? ' · client asked for ' + b.bikeIds.length + ' bikes' : b.mode !== 'specific' ? ' · asked for any ' + b.mode.replace('any', '') : '') + '</div>' +
       (b.balance != null ? '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + (b.discount ? ' (discount −' + money(b.discount) + ')' : '') +
         ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' <b>paid</b>' : b.payment && b.payment.method === 'zelle' ? ' · Zelle, note ' + esc(b.payment.ref || '') + ' · <b class="zelle-wait">awaiting Zelle confirmation</b>' : ' due') +
@@ -158,7 +158,10 @@
       (b.adText ? '<div class="small campaign-text">Campaign: ' + esc(b.adText) + '</div>' : '') + '</div>' +
       '<div class="bk-actions">' + (b.payment && b.payment.method === 'zelle' && !b.depositPaid ? '<button class="btn ok" data-zelle-paid="' + b.id + '">Mark Zelle paid</button>' : '') +
       (b.balance > 0 && b.depositPaid && !b.balancePaid && (s === 'approved' || s === 'active' || s === 'completed' || b.status === 'approved') ? '<button class="btn ok" data-balance-paid="' + b.id + '">Mark balance paid</button>' : '') + (s === 'pending' ? '<button class="btn ok" data-approve="' + b.id + '">✓ Approve</button><button class="btn danger-ghost" data-decline="' + b.id + '">✕ Decline</button>' : '') +
-      '<button class="btn ghost" data-open="' + b.id + '">Edit</button></div></div>';
+      (b.status !== 'declined' && b.status !== 'cancelled' ? '<a class="btn ghost" href="#/admin/invoice/' + esc(b.id) + '" data-invoice="' + b.id + '">Invoice</a>' : '') +
+      '<button class="btn ghost" data-open="' + b.id + '">Edit</button></div>' +
+      /* Nov 8 2026: which emails went out for this booking */
+      (b.emails && b.emails.length ? '<details class="small muted bk-emails"><summary>Emails (' + b.emails.length + ')</summary><ul class="email-log">' + b.emails.slice(-6).map((m) => '<li>' + esc((window.Mailer && Mailer.KINDS[m.kind]) || m.kind) + ' → ' + esc(m.to || '—') + ': <b>' + esc(m.status) + '</b></li>').join('') + '</ul></details>' : '') + '</div>';
   }
 
   function drawCal(body) {
@@ -231,8 +234,9 @@
   function approve(id) {
     const b = Data.get('bookings', id);
     const clash = Data.list('bookings').filter((o) => o.id !== id && o.status === 'approved' && Data.overlaps(b.start, b.end, o.start, o.end) && o.bikeIds.some((x) => b.bikeIds.includes(x)));
-    const go = () => {
-      Data.put('bookings', { id, status: 'approved', history: addHistory(b, 'Approved') });
+    const go = (anote) => {
+      Data.put('bookings', { id, status: 'approved', adminNote: anote || '', history: addHistory(b, 'Approved' + (anote ? ' (note: ' + anote + ')' : '')) });
+      if (window.Mailer) Mailer.send('approved', Data.get('bookings', id)); /* Nov 8 2026: "Approved" email to the client */
       let note = 'Booking approved';
       if (b.depositPaid && !Data.list('transactions').some((t) => t.bookingId === id && t.category === 'Booking deposit')) {
         Data.put('transactions', { date: Data.today(), description: (b.payment && b.payment.last4 ? 'Card payment (demo) ' + b.payment.brand + ' ' + b.payment.last4 + ' - ' : b.payment && b.payment.brand ? b.payment.brand + ' payment ' + (b.payment.ref ? b.payment.ref + ' ' : '(demo) ') + '- ' : 'Deposit ' + Data.settings().depositPct + '% - ') + b.company, amount: b.deposit, category: 'Booking deposit', bookingId: id, reconciled: false, createdAt: new Date().toISOString() });
@@ -240,13 +244,22 @@
       }
       toast(note); App.render();
     };
-    if (clash.length) confirmBox('Bikes already booked', 'Some of these bikes are already approved for ' + clash.map((c) => c.company).join(', ') + ' on overlapping days. Approve anyway?', 'Approve anyway', go);
-    else go();
+    const ask = () => noteBox('Approve this request?', b.company + ', ' + fmtRange(b.start, b.end) + ', ' + b.bikeIds.length + ' bikes, ' + money(b.total) + '. The client gets an email and can pay the deposit.', 'Approve', go, false);
+    if (clash.length) confirmBox('Bikes already booked', 'Some of these bikes are already approved for ' + clash.map((c) => c.company).join(', ') + ' on overlapping days. Approve anyway?', 'Approve anyway', ask);
+    else ask();
+  }
+  /* Approve / decline with an optional note for the client (it goes into the email and My bookings). */
+  function noteBox(title, text, okLabel, onOk, danger) {
+    const m = modal(title, '<p>' + esc(text) + '</p><label>Note for the client (optional)<textarea class="input" id="nb-note" rows="2" maxlength="400" placeholder="e.g. We start Sunday morning on Lee Ave."></textarea></label>' +
+      '<div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn ' + (danger ? 'danger' : 'primary') + '" id="nb-ok">' + esc(okLabel) + '</button></div>', { noFocus: true });
+    m.querySelector('#nb-ok').addEventListener('click', () => { const n = m.querySelector('#nb-note').value.trim(); closeModal(); onOk(n); });
   }
   function decline(id) {
     const b = Data.get('bookings', id);
-    confirmBox('Decline this request?', b.company + ', ' + fmtRange(b.start, b.end) + ', ' + b.bikeIds.length + ' bikes. The bikes become free again.', 'Decline', () => {
-      Data.put('bookings', { id, status: 'declined', history: addHistory(b, 'Declined') }); toast('Request declined'); App.render();
+    noteBox('Decline this request?', b.company + ', ' + fmtRange(b.start, b.end) + ', ' + b.bikeIds.length + ' bikes. The bikes become free again.', 'Decline', (note) => {
+      Data.put('bookings', { id, status: 'declined', adminNote: note || '', history: addHistory(b, 'Declined' + (note ? ' (note: ' + note + ')' : '')) });
+      if (window.Mailer) Mailer.send('declined', Data.get('bookings', id)); /* Nov 8 2026: "Declined" email to the client */
+      toast('Request declined'); App.render();
     }, true);
   }
 
@@ -563,6 +576,6 @@
     ],
     teardown,
     /* Nov 8 2026: the admin menu (js/admin-menu.js) re-uses these panels inside its sections */
-    parts: { renderMap, renderBikes, renderBookings, renderBooks, renderSettings, payAdmin, discountsAdmin, editBooking, editBike, bookingsCsv }
+    parts: { approve, decline, renderMap, renderBikes, renderBookings, renderBooks, renderSettings, payAdmin, discountsAdmin, editBooking, editBike, bookingsCsv }
   };
 })();

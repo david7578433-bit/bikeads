@@ -14,15 +14,18 @@
   /* Nov 8 2026: discounts (admin price table) + promo code for this booking */
   let me = null;
   const quoteOpts = () => ({ promo: wiz.promo || null, client: me ? { id: me.id, email: me.email } : null });
-  const quote = () => Data.priceQuote(wiz.count, wiz.start, wiz.end, quoteOpts());
+  const quote = () => (wiz.payFor && Data.get('bookings', wiz.payFor) ? bookingQuote(Data.get('bookings', wiz.payFor)) : Data.priceQuote(wiz.count, wiz.start, wiz.end, quoteOpts()));
+  /* Nov 8 2026 (David 5:13 PM: "he is not booking it. He is only requesting it"): a request first, the deposit after approval. */
+  const REQ = () => SSET('requestFirst', true) !== false;
+  const bookingQuote = (b) => ({ bikes: b.bikeIds.length, total: b.total, deposit: b.deposit, balance: b.balance, depositPct: b.depositPct, days: Data.days(b.start, b.end), weeks: b.weeks });
   const minNote = () => '<p class="small muted min-note">Minimum ' + MIN_BIKES() + ' bikes</p>';
-  const blank = () => ({ step: 'details', start: null, end: null, count: 5, promo: null, bikeIds: [], specific: false, mode: 'count', area: '', areaNote: '', biz: null, lastId: null });
+  const blank = () => ({ step: 'details', start: null, end: null, count: 5, promo: null, bikeIds: [], specific: false, mode: 'count', area: '', areaNote: '', biz: null, lastId: null, payFor: null });
   const wiz = Object.assign(blank(), { calY: null, calM: null });
   function resetWiz() { const y = wiz.calY, m = wiz.calM; Object.assign(wiz, blank(), { calY: y, calM: m }); }
   function teardown() { if (ride) { ride.destroy(); ride = null; } }
 
   function steps4(n) {
-    const names = ['Details', 'Dates & bikes', 'Price', 'Payment'];
+    const names = ['Details', 'Dates & bikes', 'Price', REQ() ? 'Request' : 'Payment'];
     return '<ol class="steps4" aria-label="Booking steps">' + names.map((s, i) => '<li class="' + (i + 1 < n ? 'done' : i + 1 === n ? 'on' : '') + '"' + (i + 1 === n ? ' aria-current="step"' : '') + '><span><b>' + (i + 1) + '</b>' + s + '</span></li>').join('') + '</ol>';
   }
   function go(step) { wiz.step = step; App.render(); window.scrollTo(0, 0); }
@@ -69,7 +72,7 @@
   }
   function renderDetails(root, user) {
     const b = bizOf(user);
-    root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>Book ad bikes</h1></div>' + steps4(1) +
+    root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>' + (REQ() ? 'Request ad bikes' : 'Book ad bikes') + '</h1></div>' + steps4(1) +
       '<form class="card form" id="det" novalidate><h2>Your business</h2>' +
       /* Nov 8 2026 (client Shimon): step 1 asks ONLY business / company name, email, phone and (3:58 PM) an optional campaign description. The area, streets and old ad-text questions were taken off. */
       /* Nov 8 2026 (admin menu → Booking form): each box can be shown/hidden, required or not, with its own label and help text. */
@@ -159,7 +162,7 @@
         const ok = freeIds.has(x.id), loc = Data.get('locations', x.locationId);
         return '<button type="button" class="bike-tile' + (chosen.has(x.id) ? ' on' : '') + (ok ? '' : ' busy') + '" data-bike="' + x.id + '"' + (ok ? '' : ' disabled') + ' aria-pressed="' + chosen.has(x.id) + '"><span class="num">' + esc(x.number) + '</span><span class="small">' + esc(loc ? loc.name : '') + '</span><span class="small">' + (ok ? 'Free' : 'Booked') + '</span></button>';
       }).join('') + '</div>' + (wiz.specific ? '<button type="button" class="btn ghost small-btn" id="clearpick" style="margin-top:.5rem">Clear, just give me any free bikes</button>' : '') + '</details>' +
-      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="confirm"' + (wiz.start && wiz.end && !weeksBad && wiz.count >= MIN_BIKES() && free.length >= MIN_BIKES() && wiz.count <= free.length ? '' : ' disabled') + '>Confirm booking ›</button></div>' +
+      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="confirm"' + (wiz.start && wiz.end && !weeksBad && wiz.count >= MIN_BIKES() && free.length >= MIN_BIKES() && wiz.count <= free.length ? '' : ' disabled') + '>' + (REQ() ? 'Next: see the price ›' : 'Confirm booking ›') + '</button></div>' +
       (wiz.start && wiz.end && !free.length ? (Data.list('bikes').length ? '<p class="err">No bikes are free for all of these days. Try other dates.</p>' : '<p class="err">Our bikes are being set up in the system right now, so they cannot be booked online yet. Please check back soon.</p>') : '') + '</section>' +
       /* Nov 8 2026 (David: "Take down this map"): the "More bikes, more streets" bike animation is off this step (rideCard kept in the code) */
       '</section>';
@@ -203,7 +206,7 @@
       '<tr class="sub"><td>Subtotal</td><td class="amt">' + money(q.subtotal) + '</td></tr>' +
       (q.discounts || []).map((x) => '<tr class="disc"><td>Discount: ' + esc(x.label) + '<span class="calc">' + x.pct + '% off</span></td><td class="amt">−' + money(x.amount) + '</td></tr>').join('') +
       '<tr class="total"><td>Total</td><td class="amt" id="grand">' + money(q.total) + '</td></tr>' +
-      '<tr class="dep"><td><strong>Deposit due now (' + q.depositPct + '%)</strong></td><td class="amt"><strong>' + money(q.deposit) + '</strong></td></tr>' +
+      '<tr class="dep"><td><strong>' + (REQ() && !wiz.payFor ? 'Deposit after we approve' : 'Deposit due now') + ' (' + q.depositPct + '%)</strong></td><td class="amt"><strong>' + money(q.deposit) + '</strong></td></tr>' +
       '<tr class="bal"><td>Balance later<span class="calc">paid before the ads start; we confirm the date with you</span></td><td class="amt">' + money(q.balance) + '</td></tr></tbody></table>';
   }
   const sampleNote = () => Data.settings().pricesAreSamples ? '<div class="sample-note" role="note"><span aria-hidden="true">ℹ️</span><span><strong>Sample prices.</strong> The real printing, setup and weekly prices will be set by Media on Wheels.</span></div>' : '';
@@ -224,7 +227,7 @@
       '<div class="bike-row" style="margin:.9rem 0 .3rem"><div><strong>Bikes</strong><div class="small muted">' + (wiz.specific ? 'Bikes ' + wiz.bikeIds.map(Data.bikeLabel).join(', ') : 'Up to ' + free.length + ' free for these dates') + '</div></div>' +
       '<div class="stepper" role="group" aria-label="Number of bikes"><button type="button" id="minus" aria-label="One bike less"' + (q.bikes <= MIN_BIKES() || wiz.specific ? ' disabled' : '') + '>−</button><output id="cnt" aria-live="polite">' + q.bikes + '</output><button type="button" id="plus" aria-label="One bike more"' + (q.bikes >= free.length || wiz.specific ? ' disabled' : '') + '>+</button></div></div>' +
       '<div id="ptab">' + priceTable(q) + '</div>' + promoBox + sampleNote() +
-      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="next">Next: payment ›</button></div></div></section>';
+      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="next">' + (REQ() ? 'Send request ›' : 'Next: payment ›') + '</button></div></div></section>';
     const upd = (n) => {
       wiz.count = Math.min(free.length, clampCount(n));
       const nq = quote();
@@ -235,7 +238,7 @@
     $('#plus', root).addEventListener('click', () => upd(wiz.count + 1));
     $('#back', root).addEventListener('click', () => go('dates'));
     $('#back2', root).addEventListener('click', () => go('dates'));
-    $('#next', root).addEventListener('click', () => go('pay'));
+    $('#next', root).addEventListener('click', () => (REQ() ? sendRequest(me) : go('pay')));
     $('#promo', root).addEventListener('submit', async (e) => {
       e.preventDefault();
       const code = e.target.code.value.trim(), msg = $('#promo-msg', root);
@@ -279,6 +282,13 @@
 
   /* v4.1: one place that books the bikes, for every payment method (card, Google Pay, Apple Pay, Zelle). */
   function placeBooking(user, pay, action, paid, note) {
+      if (wiz.payFor) { /* paying the deposit of an approved request */
+        const b = Data.get('bookings', wiz.payFor), now = new Date().toISOString();
+        Data.put('bookings', { id: b.id, payment: Object.assign({ amount: b.deposit, at: now }, pay), depositPaid: !!paid, notes: note || b.notes || '', history: (b.history || []).concat([{ at: now, by: user.name, action: action.replace('{amount}', money(b.deposit) + ' deposit') }]) });
+        if (paid && b.status === 'approved' && !Data.list('transactions').some((t) => t.bookingId === b.id && t.category === 'Booking deposit'))
+          Data.put('transactions', { date: Data.today(), description: (pay.brand || 'Payment') + ' (demo) - deposit - ' + b.company, amount: b.deposit, category: 'Booking deposit', bookingId: b.id, reconciled: false, createdAt: now });
+        return Data.get('bookings', b.id);
+      }
       // pick the bikes: the ones chosen, else free bikes in the chosen area first
       const free = Data.freeBikes(wiz.start, wiz.end);
       let ids;
@@ -310,6 +320,26 @@
       return rec;
   }
 
+  /* Request first (default): the booking is saved as "Requested" with nothing paid; the deposit is paid after approval. */
+  async function sendRequest(user) {
+    const rec = placeBooking(user, { method: 'request' }, 'Request sent (nothing paid yet; deposit after approval)', false, '');
+    if (!rec) return;
+    Data.put('bookings', { id: rec.id, requestOnly: true, payment: null });
+    wiz.lastId = rec.id;
+    const b = Data.get('bookings', rec.id);
+    if (window.Mailer) { Mailer.send('requested', b); Mailer.send('newRequest', b); }
+    go('done');
+    const text = window.SiteSettings ? SiteSettings.text('msgRequestPopup').replace(/\{bikes\}/g, b.bikeIds.length).replace(/\{dates\}/g, fmtRange(b.start, b.end)) : 'You requested ' + b.bikeIds.length + ' bikes.';
+    const m = UI.modal('Request sent', '<div class="req-pop center"><div class="done-mark" aria-hidden="true">✓</div><p class="lead" id="req-pop-text">' + esc(text) + '</p><div class="row-center"><button class="btn primary" data-close>OK</button></div></div>', { noFocus: true });
+    m.parentNode.classList.add('req-pop-wrap');
+  }
+  /* After approval: pay the deposit for that booking (My bookings → Pay deposit). */
+  function payFor(id) {
+    const b = Data.get('bookings', id); if (!b) return;
+    Object.assign(wiz, { payFor: id, start: b.start, end: b.end, count: b.bikeIds.length, specific: false, biz: { company: b.company, email: b.contactEmail, phone: b.contactPhone, adText: b.adText } });
+    wiz.step = 'pay'; location.hash = '#/client/book'; App.render(); window.scrollTo(0, 0);
+  }
+
   function renderPay(root, user) {
     if (!wiz.start || !wiz.end) return go('dates');
     const q = quote();
@@ -339,7 +369,7 @@
       sum +
       '<button class="btn primary wide big" type="submit" id="pay">Pay deposit ' + money(q.deposit) + '</button>' +
       '<p class="demo-note">Demo — real card processing connects once the payment account is set up. Nothing is charged, and the card number is not saved.</p></form></div></section>';
-    $('#back', root).addEventListener('click', () => go('price'));
+    $('#back', root).addEventListener('click', () => { if (wiz.payFor) { resetWiz(); location.hash = '#/client/bookings'; } else go('price'); });
     $$('[data-pm]', root).forEach((t) => t.addEventListener('click', () => {
       wiz.pay = t.getAttribute('data-pm');
       $$('[data-pm]', root).forEach((x) => { const on = x === t; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
@@ -395,19 +425,20 @@
 
   function renderDone(root) {
     const b = Data.get('bookings', wiz.lastId);
+    const isReq = !!(b && b.requestOnly && !b.depositPaid && !(b.payment && b.payment.method));
     const J = window.JCal && JCal.ready ? JCal : null;
-    root.innerHTML = '<section class="page narrow center"><div class="done-mark" aria-hidden="true">✓</div><h1>' + esc(SSET('msgDoneTitle', 'Booking confirmed')) + '</h1>' +
-      '<p class="lead">' + esc(window.SiteSettings ? SiteSettings.text(b && b.payment && b.payment.method === 'zelle' ? 'msgDoneZelle' : 'msgDone') : 'Thank you! Your booking is sent.') + '</p>' +      (b ? '<div class="card confirm-card"><dl class="kv wide"><dt>Booking #</dt><dd>' + 'BK-' + esc(String(b.id).slice(-6).toUpperCase()) + '</dd>' +
+    root.innerHTML = '<section class="page narrow center"><div class="done-mark" aria-hidden="true">✓</div><h1>' + esc(isReq ? SSET('msgRequestTitle', 'Request sent') : SSET('msgDoneTitle', 'Booking confirmed')) + '</h1>' +
+      '<p class="lead">' + esc(window.SiteSettings ? SiteSettings.text(isReq ? 'msgRequest' : b && b.payment && b.payment.method === 'zelle' ? 'msgDoneZelle' : 'msgDone') : 'Thank you! Your booking is sent.') + '</p>' +      (b ? '<div class="card confirm-card"><dl class="kv wide"><dt>Booking #</dt><dd>' + 'BK-' + esc(String(b.id).slice(-6).toUpperCase()) + '</dd>' +
         '<dt>Business</dt><dd>' + esc(b.company) + '</dd>' + (b.areaName || b.areaNote ? '<dt>Area</dt><dd>' + esc(b.areaName || '') + (b.areaNote ? ' · ' + esc(b.areaNote) : '') + '</dd>' : '') +
         (b.adText ? '<dt>Campaign</dt><dd class="campaign-text">' + esc(b.adText) + '</dd>' : '') +
         '<dt>Dates</dt><dd>' + esc(fmtRange(b.start, b.end)) + (J ? '<br><span class="he" lang="he">' + esc(J.day(b.start).heFull) + ' – ' + esc(J.day(b.end).heFull) + '</span>' : '') + '</dd>' +
         '<dt>Bikes</dt><dd>' + b.bikeIds.length + '</dd>' + /* Nov 8 2026 (client): count only, no bike numbers (admin still sees them) */
         '<dt>Printing & setup</dt><dd>' + money(b.setupTotal) + '</dd><dt>Weekly (' + b.weeks + ' wk)</dt><dd>' + money(b.weeklyTotal) + '</dd>' +
         (b.discount ? '<dt>Discount</dt><dd>−' + money(b.discount) + '</dd>' : '') + '<dt>Total</dt><dd>' + money(b.total) + '</dd>' +
-        '<dt class="hl">' + (b.depositPaid ? 'Deposit paid' : 'Deposit to pay') + (b.depositPct != null ? ' (' + b.depositPct + '%)' : '') + '</dt><dd class="hl">' + money(b.deposit != null ? b.deposit : b.total) + '</dd>' +
-        (b.balance != null ? '<dt>Balance later</dt><dd>' + money(b.balance) + (b.balancePaid ? ' · paid' : '') + '</dd>' : '') + '<dt>Payment</dt><dd>' + payDesc(b) + '</dd>' +
-        '<dt>Status</dt><dd><span class="badge st-pending">Pending</span> ' + esc(window.SiteSettings ? SiteSettings.text('msgPending') : 'until ' + (Data.settings().businessName || 'Media on Wheels') + ' approves it') + '</dd></dl></div>' : '') +
-      '<div class="row-center"><a class="btn primary" href="#/client/bookings" id="tomy">My bookings</a><button class="btn ghost" id="again">Book more</button></div>' +
+        '<dt class="hl">' + (b.depositPaid ? 'Deposit paid' : isReq ? 'Deposit after approval' : 'Deposit to pay') + (b.depositPct != null ? ' (' + b.depositPct + '%)' : '') + '</dt><dd class="hl">' + money(b.deposit != null ? b.deposit : b.total) + '</dd>' +
+        (b.balance != null ? '<dt>Balance later</dt><dd>' + money(b.balance) + (b.balancePaid ? ' · paid' : '') + '</dd>' : '') + (isReq ? '' : '<dt>Payment</dt><dd>' + payDesc(b) + '</dd>') +
+        '<dt>Status</dt><dd>' + (b.status === 'approved' ? '<span class="badge st-approved">Approved</span>' : '<span class="badge st-pending">' + (isReq ? 'Requested' : 'Pending') + '</span> ' + esc(window.SiteSettings ? SiteSettings.text('msgPending') : 'until ' + (Data.settings().businessName || 'Media on Wheels') + ' approves it')) + '</dd></dl></div>' : '') +
+      '<div class="row-center"><a class="btn primary" href="#/client/bookings" id="tomy">My bookings</a><button class="btn ghost" id="again">' + (isReq ? 'Request more' : 'Book more') + '</button></div>' +
       /* Nov 8 2026 (David): ask for feedback on the site and on our service after a booking */
       '<div class="card fb-ask"><h2>How did we do?</h2><p class="muted small">Tell us about the website and our service. It takes a few seconds.</p><button type="button" class="btn ghost pill" id="fbafter" data-feedback="booking" data-booking="' + esc(b ? b.id : '') + '">Leave feedback</button></div></section>';
     $('#again', root).addEventListener('click', () => { resetWiz(); App.render(); });
@@ -425,15 +456,18 @@
     teardown();
     const mine = Data.list('bookings').filter((b) => b.clientId === user.id).sort((a, b) => b.start.localeCompare(a.start));
     root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>My bookings</h1><a class="btn primary" href="#/client/book" id="newbk">+ New</a></div>' +
-      (mine.length ? mine.map((b) => '<article class="card my-bk"><div class="bk-title"><strong>' + fmtRange(b.start, b.end) + '</strong> ' + badge(b) + '</div>' +
+      (mine.length ? mine.map((b) => '<article class="card my-bk"><div class="bk-title"><strong>' + fmtRange(b.start, b.end) + '</strong> ' + (b.requestOnly && statusOf(b) === 'pending' ? '<span class="badge st-pending">Requested</span>' : badge(b)) + '</div>' +
         '<div class="small">' + b.bikeIds.length + ' bike' + (b.bikeIds.length === 1 ? '' : 's') + (b.areaName ? ' · ' + esc(b.areaName) : '') + '</div>' +
         (b.adText ? '<div class="small campaign-text">Campaign: ' + esc(b.adText) + '</div>' : '') +
         (b.setupTotal != null ? '<div class="small muted">Printing & setup ' + money(b.setupTotal) + ' · weekly ' + money(b.weeklyTotal) + '</div>' : '') +
         '<div class="small muted">' + payLine(b) + '</div>' +
+        (b.adminNote && (b.status === 'approved' || b.status === 'declined') ? '<div class="small">Note from us: ' + esc(b.adminNote) + '</div>' : '') +
+        (b.requestOnly && b.status === 'approved' && !b.depositPaid && !(b.payment && b.payment.method === 'zelle') ? '<div class="row-end"><button class="btn primary" data-paydep="' + b.id + '">Pay deposit ' + money(b.deposit) + ' ›</button></div>' : '') +
         (statusOf(b) === 'pending' ? '<div class="row-end"><button class="btn danger-ghost" data-cancel="' + b.id + '">Cancel request</button></div>' : '') + '</article>').join('')
-        : '<div class="card center"><p>No bookings yet.</p><a class="btn primary" href="#/client/book">Book bikes</a></div>') + '</section>';
+        : '<div class="card center"><p>No bookings yet.</p><a class="btn primary" href="#/client/book">' + (REQ() ? 'Request bikes' : 'Book bikes') + '</a></div>') + '</section>';
     const nb = $('#newbk', root); if (nb) nb.addEventListener('click', () => resetWiz());
     root.addEventListener('click', (e) => {
+      const pd = e.target.closest('[data-paydep]'); if (pd) { payFor(pd.getAttribute('data-paydep')); return; }
       const c = e.target.closest('[data-cancel]');
       if (c) {
         const b = Data.get('bookings', c.getAttribute('data-cancel'));
@@ -446,9 +480,9 @@
   }
 
   window.ClientViews = {
-    PAY_METHODS,
+    PAY_METHODS, payFor, sendRequest,
     tabs: [
-      { key: 'book', label: 'Book', icon: 'cal', render: renderBook },
+      { key: 'book', get label() { return REQ() ? 'Request bikes' : 'Book'; }, icon: 'cal', render: renderBook },
       { key: 'bookings', label: 'My bookings', icon: 'list', render: renderMine }
     ],
     teardown, resetWiz

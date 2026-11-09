@@ -18,6 +18,7 @@
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
     shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/>',
     menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
     sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'
   };
 
@@ -30,7 +31,8 @@
         '@discounts': (el) => P().discountsAdmin && P().discountsAdmin(el),
         '@paymethods': (el) => P().payAdmin && P().payAdmin(el),
         '@homevideo': (el) => (window.HomeVideo ? HomeVideo.renderAdmin(el) : el.remove()),
-        '@homecontent': (el) => (window.HomePage ? HomePage.renderAdmin(el) : el.remove())
+        '@homecontent': (el) => (window.HomePage ? HomePage.renderAdmin(el) : el.remove()),
+        '@emailstatus': (el) => (window.Mailer ? emailStatus(el) : el.remove())
       };
       AdminForms.renderFields($('#set-host', root), sec, parts, rest && rest[0] ? decodeURIComponent(rest[0]) : '');
     };
@@ -51,9 +53,11 @@
     { key: 'form', label: 'Booking form', icon: 'form', group: 'Settings', render: settingsPage('form') },
     { key: 'messages', label: 'Messages', icon: 'chat', group: 'Settings', render: settingsPage('messages') },
     { key: 'switches', label: 'Switches', icon: 'toggle', group: 'Settings', render: settingsPage('switches') },
+    { key: 'email', label: 'Email', icon: 'mail', group: 'Settings', render: settingsPage('email') },
     { key: 'seo', label: 'Google & sharing', icon: 'search', group: 'Settings', render: settingsPage('seo') },
     { key: 'account', label: 'Admins & backup', icon: 'shield', group: 'Admin', render: renderAccount },
-    { key: 'settings', label: 'Classic settings page', icon: 'gear', group: 'Admin', render: (r) => P().renderSettings(r) }
+    { key: 'settings', label: 'Classic settings page', icon: 'gear', group: 'Admin', render: (r) => P().renderSettings(r) },
+    { key: 'invoice', label: 'Invoice', icon: 'book', group: 'Admin', hidden: true, render: renderInvoice }
   ];
   const BOTTOM = ['dashboard', 'bookings', 'inbox', 'bikes'];
 
@@ -64,7 +68,7 @@
   }
   function groups(tabs) {
     const out = [];
-    tabs.forEach((t) => { const g = t.group || 'More'; let x = out.find((o) => o.g === g); if (!x) { x = { g, list: [] }; out.push(x); } x.list.push(t); });
+    tabs.filter((t) => !t.hidden).forEach((t) => { const g = t.group || 'More'; let x = out.find((o) => o.g === g); if (!x) { x = { g, list: [] }; out.push(x); } x.list.push(t); });
     return out;
   }
   function shell(role, tabs, active, current, top) {
@@ -83,7 +87,7 @@
       if ((d.label + ' ' + (d.help || '')).toLowerCase().includes(q)) hits.push({ href: '#/' + role + '/' + s.key + (d.k[0] === '@' ? '' : '/' + encodeURIComponent(d.k)), t: d.label, sub: s.title });
     }));
     [['zelle', 'pricing', 'Payment methods / Zelle'], ['promo', 'pricing', 'Promo codes'], ['discount', 'pricing', 'Discounts'], ['video', 'content', 'Main video'], ['stats', 'content', 'Numbers (stats)'], ['review', 'content', 'Reviews'], ['story', 'content', 'Our story'],
-      ['admin', 'account', 'Admins'], ['backup', 'account', 'Backup / export'], ['export', 'bookings', 'Export bookings (CSV)'], ['call', 'inbox', 'Call requests'], ['feedback', 'inbox', 'Feedback'], ['area', 'bikes', 'Areas'], ['tracker', 'bikes', 'Trackers'], ['balance', 'books', 'Bank balance']]
+      ['admin', 'account', 'Admins'], ['invoice', 'bookings', 'Invoices (Bookings → Invoice)'], ['request', 'bookings', 'Requests to approve'], ['email', 'email', 'Email'], ['backup', 'account', 'Backup / export'], ['export', 'bookings', 'Export bookings (CSV)'], ['call', 'inbox', 'Call requests'], ['feedback', 'inbox', 'Feedback'], ['area', 'bikes', 'Areas'], ['tracker', 'bikes', 'Trackers'], ['balance', 'books', 'Bank balance']]
       .forEach(([w, k, t]) => { if (w.includes(q) || q.includes(w)) hits.push({ href: '#/' + role + '/' + k, t, sub: (SECTIONS.find((s) => s.key === k) || {}).label }); });
     const seen = new Set();
     const list = hits.filter((h) => !seen.has(h.href + h.t) && seen.add(h.href + h.t)).slice(0, 12);
@@ -292,6 +296,53 @@
     });
   }
 
+
+  /* ---------- Invoice (David, 5:13 PM: "Build the invoice option to send the invoice") ---------- */
+  function renderInvoice(root, user, rest) {
+    const b = Data.get('bookings', rest && rest[0]);
+    if (!b) { root.innerHTML = '<section class="page narrow"><div class="card">That booking was not found. <a href="#/admin/bookings">Back to bookings</a></div></section>'; return; }
+    if (!b.invoiceNo) { Data.put('bookings', { id: b.id, invoiceNo: 'INV-' + Data.today().slice(0, 4) + '-' + String(b.id).slice(-5).toUpperCase(), invoiceAt: new Date().toISOString() }); }
+    const x = Data.get('bookings', b.id), s = Data.settings(), hc = s.homeContent || {};
+    const D = (n) => Mailer.money(n);
+    const paidDep = x.depositPaid ? +x.deposit || 0 : 0, paidBal = x.balancePaid ? +x.balance || 0 : 0;
+    const due = Math.max(0, (+x.total || 0) - paidDep - paidBal);
+    const rows = [['Printing & setup', (x.bikeIds || []).length + ' bikes × ' + D(x.setupFeePerBike) + ' (one time)', x.setupTotal],
+      ['Weekly charge', (x.bikeIds || []).length + ' bikes × ' + D(x.weeklyPerBike) + ' a week × ' + x.weeks + ' week' + (x.weeks > 1 ? 's' : ''), x.weeklyTotal]]
+      .concat((x.discounts || []).map((d) => ['Discount: ' + d.label, d.pct + '% off' + (x.promoCode && d.kind === 'promo' ? ' (code ' + x.promoCode + ')' : ''), -d.amount]));
+    root.innerHTML = '<section class="page adm-page"><div class="page-head"><a class="back" href="#/admin/bookings">‹ Bookings</a><h1>Invoice</h1></div>' +
+      '<div class="inv-actions"><button class="btn primary" id="inv-print">Print / Save as PDF</button><button class="btn" id="inv-mail">Email to client</button></div><p class="center small muted" id="inv-status">' + esc(lastMail(x)) + '</p>' +
+      '<article class="invoice" id="invoice"><div class="inv-head"><div><h2>' + esc(s.businessName || 'Media on Wheels') + '</h2><div class="small">' + esc([hc.contactPhone, hc.contactEmail, SS().get('contactAddress')].filter(Boolean).join(' · ')) + '</div></div>' +
+      '<div class="inv-meta"><b>INVOICE ' + esc(x.invoiceNo) + '</b><br>Date: ' + esc(fmtDate(String(x.invoiceAt || new Date().toISOString()).slice(0, 10))) + '<br>Booking: BK-' + esc(String(x.id).slice(-6).toUpperCase()) + '</div></div>' +
+      '<p class="inv-to"><b>Bill to:</b> ' + esc(x.company || '') + (x.clientName ? ', ' + esc(x.clientName) : '') + (x.contactEmail ? '<br>' + esc(x.contactEmail) : '') + (x.contactPhone ? ' · ' + esc(x.contactPhone) : '') + '<br><b>Dates:</b> ' + esc(UI.fmtRange(x.start, x.end)) + ' (' + Data.days(x.start, x.end) + ' days)' + (x.adText ? '<br><b>Campaign:</b> ' + esc(x.adText) : '') + '</p>' +
+      '<table class="inv-table"><thead><tr><th>Item</th><th>Details</th><th class="amt">Amount</th></tr></thead><tbody>' +
+      rows.map((r) => '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="amt">' + (r[2] < 0 ? '−' : '') + esc(D(Math.abs(r[2] || 0))) + '</td></tr>').join('') +
+      '<tr class="inv-total"><td colspan="2">Total</td><td class="amt">' + esc(D(x.total)) + '</td></tr>' +
+      '<tr><td colspan="2">Deposit (' + (x.depositPct != null ? x.depositPct : 20) + '%)' + (x.depositPaid ? ' — paid' : ' — not paid yet') + '</td><td class="amt">' + (x.depositPaid ? '−' : '') + esc(D(x.deposit)) + '</td></tr>' +
+      (x.balancePaid ? '<tr><td colspan="2">Balance — paid</td><td class="amt">−' + esc(D(x.balance)) + '</td></tr>' : '') +
+      '<tr class="inv-due"><td colspan="2">Balance due</td><td class="amt">' + esc(D(due)) + '</td></tr></tbody></table>' +
+      '<p class="inv-foot">The bikes ride 6 days a week, Sunday to Friday (not on Shabbos). Thank you for your business.</p></article></section>';
+    $('#inv-print', root).addEventListener('click', () => window.print());
+    $('#inv-mail', root).addEventListener('click', async () => {
+      const lines = rows.map((r) => r[0] + ' (' + r[1] + '): ' + (r[2] < 0 ? '−' : '') + D(Math.abs(r[2] || 0))).concat(['Total: ' + D(x.total), 'Deposit' + (x.depositPaid ? ' paid' : ' (not paid yet)') + ': ' + D(x.deposit), 'Balance due: ' + D(due)]);
+      const st = $('#inv-status', root); st.textContent = 'Sending…';
+      const msg = Mailer.compose('invoice', Data.get('bookings', x.id));
+      const res = await Mailer.send('invoice', Data.get('bookings', x.id), { append: lines.join('\n') + '\n\n' + (s.businessName || 'Media on Wheels') });
+      if (res.ok) { Data.put('bookings', { id: x.id, invoiceSentAt: new Date().toISOString() }); }
+      st.textContent = res.ok ? 'Invoice emailed to ' + msg.to + ' ✓' : 'Invoice ' + res.status + '. You can print it or save it as PDF and send it yourself.';
+    });
+  }
+  function lastMail(b) { const m = (b.emails || []).filter((e) => e.kind === 'invoice').pop(); return m ? 'Last email: ' + m.status + ' (' + new Date(m.at).toLocaleString() + ')' : ''; }
+
+  /* Email section: the connection box at the top */
+  function emailStatus(el) {
+    const remote = window.Auth && Auth.remote;
+    const draw = (state, text) => { el.innerHTML = '<h2>Email connection</h2><div class="email-state' + (state === 'ok' ? ' ok' : '') + '"><span class="dot" aria-hidden="true"></span><b>' + esc(text) + '</b></div>' +
+      '<p class="small muted">' + (state === 'ok' ? 'Emails go out from your connected mail account.' : 'Email not connected yet. The site still works: each email is kept on the booking as "not sent — email not connected". To connect: put the mail account (a Gmail app password, or a Resend key) into the Supabase function "mow-send-email" (steps in supabase/functions/mow-send-email/README.md).') + '</p>' +
+      '<div class="row-end"><button class="btn" id="em-test">Send a test email</button></div><p class="small" id="em-res" role="status"></p>'; 
+      el.querySelector('#em-test').addEventListener('click', async () => { const r = el.querySelector('#em-res'); r.textContent = 'Sending…'; const res = await Mailer.test(); r.textContent = res.ok ? 'Test email sent to ' + Mailer.compose('test').to + ' ✓' : 'Test email ' + res.status + '.'; if (res.ok) draw('ok', 'Connected'); }); };
+    draw(Mailer.connected() ? 'ok' : 'off', Mailer.connected() ? 'Connected' : remote ? 'Email not connected yet' : 'Email not connected yet (this-device mode)');
+  }
+
   /* ---------- Areas (service areas the bikes belong to) ---------- */
   function manageAreas(done) {
     const draw = () => {
@@ -307,5 +358,5 @@
 
   /* Replace the admin tabs with the menu sections (platform.js may add the Deliver tab before "settings" afterwards). */
   if (window.AdminViews) AdminViews.tabs = SECTIONS.slice();
-  window.AdminMenu = { ICON, SECTIONS, addMany, renderBikesPlus, BOTTOM, shell, wire, openDrawer, closeDrawer, results, manageAreas, renderDashboard, renderClients, renderAccount };
+  window.AdminMenu = { renderInvoice, ICON, SECTIONS, addMany, renderBikesPlus, BOTTOM, shell, wire, openDrawer, closeDrawer, results, manageAreas, renderDashboard, renderClients, renderAccount };
 })();

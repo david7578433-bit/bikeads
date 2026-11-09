@@ -21,15 +21,15 @@ function boot() {
 
 test('admin menu: every section David asked for is in the menu, older pages kept', () => {
   const m = read('js/admin-menu.js');
-  for (const k of ['dashboard', 'bookings', 'bikes', 'clients', 'inbox', 'pricing', 'calendar', 'content', 'appearance', 'form', 'messages', 'switches', 'seo', 'account', 'map', 'books', 'settings'])
+  for (const k of ['dashboard', 'bookings', 'bikes', 'clients', 'inbox', 'pricing', 'calendar', 'content', 'appearance', 'form', 'messages', 'switches', 'seo', 'email', 'invoice', 'account', 'map', 'books', 'settings'])
     assert.match(m, new RegExp("key: '" + k + "'"), k);
   assert.match(m, /const BOTTOM = \['dashboard', 'bookings', 'inbox', 'bikes'\]/, 'phone bottom bar + Menu');
   assert.match(m, /Find a setting/, 'search box');
   const html = read('index.html');
-  for (const f of ['js/settings.js', 'js/admin-forms.js', 'js/admin-menu.js', 'admin.css']) assert.match(html, new RegExp(f.replace('.', '\\.') + '\\?v=15'), f);
+  for (const f of ['js/settings.js', 'js/admin-forms.js', 'js/admin-menu.js', 'js/mailer.js', 'admin.css']) assert.match(html, new RegExp(f.replace('.', '\\.') + '\\?v=1[6-9]'), f);
   assert.ok(html.indexOf('js/admin-menu.js') > html.indexOf('js/admin.js') && html.indexOf('js/admin-menu.js') < html.indexOf('js/platform.js'), 'menu loads after admin.js, before the Deliver plugin');
   assert.ok(html.indexOf('js/settings.js') > html.indexOf('js/data.js'));
-  assert.match(read('sw.js'), /bikeads-v15/);
+  assert.match(read('sw.js'), /bikeads-v1[6-9]/);
   assert.match(read('sw.js'), /"js\/admin-menu\.js"/);
 });
 
@@ -87,7 +87,7 @@ test('the site reads the settings: client form, calendar, messages, main page, c
   const c = read('js/client.js'), h = read('js/home.js'), a = read('js/app.js'), s = read('js/settings.js');
   assert.match(c, /SiteSettings\.field\(id\)/, 'booking form boxes');
   assert.match(c, /SiteSettings\.blocked\(ds\)/); assert.match(c, /SiteSettings\.earliest\(\)/); assert.match(c, /SSET\('weeksMin'/);
-  assert.match(c, /SiteSettings\.text\(b && b\.payment && b\.payment\.method === 'zelle' \? 'msgDoneZelle' : 'msgDone'\)/);
+  assert.match(c, /SiteSettings\.text\(isReq \? 'msgRequest' : b && b\.payment && b\.payment\.method === 'zelle' \? 'msgDoneZelle' : 'msgDone'\)/);
   assert.match(h, /SiteSettings\.get\('howSteps'\)/); assert.match(h, /function faq\(\)/); assert.match(h, /footerText/);
   assert.match(a, /SiteSettings\.apply\(\)/);
   assert.match(s, /--brand:/); assert.match(s, /mow-dark/); assert.match(s, /hide-sec-/); assert.match(s, /mow-maint/);

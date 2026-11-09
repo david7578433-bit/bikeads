@@ -49,7 +49,7 @@
     const right = user ? '<a class="btn primary pill lnav-cta" href="#/' + user.role + '">My account</a>' : '<a class="btn primary pill lnav-cta" href="#/login">Log in</a>';
     return '<header class="lnav"><a class="brand" href="#/" data-jump="top">' + logo + esc(brand()) + '</a>' +
       '<nav class="lnav-links" aria-label="Main page"><a href="#what" data-jump="what">What we do</a><a href="#prices" data-jump="prices">Prices</a><a href="#feedback" data-jump="feedback">Feedback</a><a href="#contact" data-jump="contact">Contact</a></nav>' +
-      '<button type="button" class="btn ghost pill lnav-call" data-callreq="home-header" aria-label="Request a call"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg><span class="lc-t">Request a call</span></button>' + right + '</header>';
+      '<button type="button" class="btn ghost pill lnav-call" data-contact="home-header" aria-label="Contact us"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg><span class="lc-t">Contact us</span></button>' + right + '</header>';
   }
 
   function hero(c, user) {
@@ -64,7 +64,7 @@
   /* Nov 8 2026 (David): "Only if you are signed in can you press Book Bikes". Signed out: "Create an account" instead. */
   function bookOrJoin(user, cls, short) {
     if (!user) return '<a class="' + cls + '" href="#/signup">' + (short ? 'Create account' : 'Create an account') + '</a>';
-    return '<a class="' + cls + '" href="#/' + (user.role === 'client' ? 'client/book' : user.role) + '" data-book>Book bikes</a>';
+    return '<a class="' + cls + '" href="#/' + (user.role === 'client' ? 'client/book' : user.role) + '" data-book>' + (window.SiteSettings && SiteSettings.get('requestFirst') === false ? 'Book bikes' : 'Request bikes') + '</a>'; /* Nov 8 2026 5:13 PM: a request first */
   }
 
   function head(id, h, p) { return '<div class="sec-head"><h2 id="' + id + '-h">' + h + '</h2>' + (p ? '<p>' + p + '</p>' : '') + '</div>'; }
@@ -154,16 +154,16 @@
     const addr = window.SiteSettings ? String(SiteSettings.get('contactAddress') || '').trim() : '';
     if (addr) lines.push('<span class="contact-addr">' + esc(addr) + '</span>');
     return '<section class="sec book-sec" id="contact" aria-labelledby="contact-h"><div class="book-panel">' +
-      '<h2 id="contact-h">Ready to put your ad on the street?</h2><p>Pick your dates and bikes, see the price, and book online.</p>' +
+      '<h2 id="contact-h">Ready to put your ad on the street?</h2><p>Pick your dates and bikes, see the price, and send your request online.</p>' +
       '<div class="hero-cta center">' + (!user || user.role === 'admin' ? (user ? bookOrJoin(user, 'btn primary big pill') : '') + '<a class="btn big pill ' + (user ? 'white' : 'primary') + '" href="#/signup">Create an account</a>' : bookOrJoin(user, 'btn primary big pill')) + '</div>' +
       (lines.length ? '<div class="contact-lines">' + lines.join('') + '</div>' : '') +
       /* Nov 8 2026 (David): Request a call + Leave feedback */
-      '<div class="contact-more"><button type="button" class="btn big pill white" data-callreq="home-contact">Request a call</button><button type="button" class="btn big pill white" data-feedback="home">Leave feedback</button></div></div></section>';
+      '<div class="contact-more"><button type="button" class="btn big pill white" data-contact="home-contact">Contact us</button><button type="button" class="btn big pill white" data-feedback="home">Leave feedback</button></div></div></section>';
   }
 
   function foot() {
     const ft = window.SiteSettings ? String(SiteSettings.get('footerText') || '').trim() : '';
-    return '<footer class="lfoot"><span>' + logo + esc(brand()) + '</span>' + (ft ? '<span class="lfoot-text">' + esc(ft) + '</span>' : '') + '<span class="muted small">Main video: <a href="' + HomeVideo.DEFAULT.creditUrl + '" target="_blank" rel="noopener">' + esc(HomeVideo.DEFAULT.credit) + '</a></span><span class="lfoot-links"><button type="button" class="linkish" data-feedback="home">Leave feedback</button><button type="button" class="linkish" data-callreq="home-footer">Request a call</button><a href="#/login">Log in</a></span></footer>';
+    return '<footer class="lfoot"><span>' + logo + esc(brand()) + '</span>' + (ft ? '<span class="lfoot-text">' + esc(ft) + '</span>' : '') + '<span class="muted small">Main video: <a href="' + HomeVideo.DEFAULT.creditUrl + '" target="_blank" rel="noopener">' + esc(HomeVideo.DEFAULT.credit) + '</a></span><span class="lfoot-links"><button type="button" class="linkish" data-feedback="home">Leave feedback</button><button type="button" class="linkish" data-contact="home-footer">Contact us</button><a href="#/login">Log in</a></span></footer>';
   }
 
   function dock(user) {

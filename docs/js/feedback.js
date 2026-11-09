@@ -54,7 +54,7 @@
   function openCallRequest(opts) {
     opts = opts || {};
     const u = user();
-    const m = modal('Request a call', '<form id="crform" class="form cr-form" novalidate>' +
+    const m = modal('Request a call back', '<form id="crform" class="form cr-form" novalidate>' +
       '<p class="muted small">Leave your number and we will call you back.</p>' +
       '<label>Your name<input class="input" name="name" required maxlength="120" autocomplete="name" value="' + esc(u ? u.name || '' : '') + '"></label>' +
       '<label>Phone number<input class="input" name="phone" type="tel" inputmode="tel" required maxlength="40" autocomplete="tel" placeholder="(845) 555-0123" value="' + esc(u ? u.phone || '' : '') + '"></label>' +
@@ -77,6 +77,23 @@
     return m;
   }
 
+  /* ---------- Contact us (David, Nov 8 5:13 PM: "Take down 'Request a Call.' Put 'Contact Us' so you can contact us by phone or email.
+   * Then it should also be an option to request the call") ---------- */
+  function openContact(opts) {
+    opts = opts || {};
+    const hc = Data.settings().homeContent || {};
+    const phone = String(hc.contactPhone || '').trim(), email = String(hc.contactEmail || '').trim();
+    const ico = (d) => '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+    const m = modal('Contact us', '<div class="contact-box">' +
+      (phone ? '<a class="contact-opt" href="tel:' + esc(phone.replace(/[^\d+]/g, '')) + '" id="ct-phone">' + ico('<path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/>') + '<span><b>Call us</b><small>' + esc(phone) + '</small></span></a>' : '') +
+      (email ? '<a class="contact-opt" href="mailto:' + esc(email) + '" id="ct-email">' + ico('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>') + '<span><b>Email us</b><small>' + esc(email) + '</small></span></a>' : '') +
+      (!phone && !email ? '<p class="muted small">Our phone number and email will be here soon. You can ask us to call you back:</p>' : '') +
+      '<button type="button" class="contact-opt" id="ct-call">' + ico('<path d="M15 3h6v6M21 3l-7 7"/><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/>') + '<span><b>Request a call back</b><small>Leave your number, we call you</small></span></button>' +
+      '</div>', { noFocus: true });
+    $('#ct-call', m).addEventListener('click', () => openCallRequest({ source: (opts.source || 'site') + '-contact' }));
+    return m;
+  }
+
   function thanks(m, h, p) {
     const body = $('.modal-body', m) || m;
     body.innerHTML = '<div class="fb-thanks center"><div class="done-mark" aria-hidden="true">✓</div><h3>' + esc(h) + '</h3><p class="muted">' + esc(p) + '</p><div class="row-center"><button class="btn primary" data-close>Close</button></div></div>';
@@ -84,12 +101,14 @@
 
   /* the two buttons, for any page */
   function buttonsHtml(cls) {
-    return '<span class="fb-btns ' + (cls || '') + '"><button type="button" class="btn ghost pill fb-btn" data-feedback>Leave feedback</button><button type="button" class="btn ghost pill fb-btn" data-callreq>Request a call</button></span>';
+    return '<span class="fb-btns ' + (cls || '') + '"><button type="button" class="btn ghost pill fb-btn" data-feedback>Leave feedback</button><button type="button" class="btn ghost pill fb-btn" data-contact>Contact us</button></span>';
   }
   /* one listener for every [data-feedback] / [data-callreq] button on the site */
   document.addEventListener('click', (e) => {
     const fb = e.target.closest('[data-feedback]');
     if (fb) { e.preventDefault(); openFeedback({ source: fb.getAttribute('data-feedback') || 'site', bookingId: fb.getAttribute('data-booking') || '' }); return; }
+    const ct = e.target.closest('[data-contact]');
+    if (ct) { e.preventDefault(); openContact({ source: ct.getAttribute('data-contact') || 'site' }); return; }
     const cr = e.target.closest('[data-callreq]');
     if (cr) { e.preventDefault(); openCallRequest({ source: cr.getAttribute('data-callreq') || 'site' }); }
   });
@@ -135,7 +154,7 @@
         App.render();
       }));
     },
-    openFeedback, openCallRequest, buttonsHtml
+    openFeedback, openCallRequest, openContact, buttonsHtml
   };
   window.Inbox = Inbox;
 })();

@@ -68,20 +68,24 @@
       f('fontHeading', 'Headline font', 'select', 'DM Serif Display', { options: FONTS_HEAD, live: true }),
       f('themeMode', 'Light or dark', 'select', 'light', { options: [['light', 'Light'], ['dark', 'Dark']], live: true })
     ] },
-    { key: 'form', title: 'Booking form', icon: 'form', intro: 'Step 1 of booking. Turn each box on or off, make it required, change its words.', fields:
+    { key: 'form', title: 'Booking form', icon: 'form', intro: 'Step 1 of booking. Turn each box on or off, make it required, change its words.', fields: [
+      f('requestFirst', 'Clients send a REQUEST first and pay the deposit only after you approve', 'toggle', true, { live: true, help: 'Off = the old way: the client pays the deposit right away and the booking waits for approval.' })].concat(
       FIELDS4.reduce((a, [id, label, ph, req]) => a.concat([
         f('formFields.' + id + '.show', label + ': show', 'toggle', true, { live: true, group: label }),
         f('formFields.' + id + '.required', label + ': required', 'toggle', req, { live: true, group: label }),
         f('formFields.' + id + '.label', label + ': label', 'text', label, { live: true, group: label }),
         f('formFields.' + id + '.help', label + ': help text (inside the box)', 'text', ph, { live: true, group: label })
-      ]), []) },
+      ]), [])) },
     { key: 'messages', title: 'Messages', icon: 'chat', intro: 'Texts people see on the site. Nothing is sent by email or SMS. {business} = the business name.', fields: [
+      f('msgRequestPopup', 'Pop-up after a request ({bikes}, {dates})', 'text', 'You requested {bikes} bikes for {dates}. We will review it and confirm soon.', { live: true }),
+      f('msgRequestTitle', 'Request sent: title', 'text', 'Request sent', { live: true }),
+      f('msgRequest', 'Request sent: message', 'textarea', 'Thank you! This is a request, not a booking yet. {business} will review it and confirm. You pay the deposit after it is approved.', { live: true }),
       f('msgDoneTitle', 'Booking done: title', 'text', 'Booking confirmed', { live: true }),
       f('msgDone', 'Booking done: message (card, Google Pay, Apple Pay)', 'textarea', 'Thank you! Your deposit went through (demo) and your booking is sent to {business}.', { live: true }),
       f('msgDoneZelle', 'Booking done: message (Zelle)', 'textarea', 'Thank you! Your booking is sent. It shows as “Awaiting Zelle confirmation” until we see your Zelle payment.', { live: true }),
       f('msgPending', 'Status line under a new booking', 'text', 'until {business} approves it', { live: true }),
       f('msgFeedbackThanks', 'After "Leave feedback"', 'text', 'Thank you for your feedback!', { live: true }),
-      f('msgCallThanks', 'After "Request a call" ({phone} = their number)', 'text', 'We got your request and will call you at {phone}.', { live: true })
+      f('msgCallThanks', 'After "Request a call back" ({phone} = their number)', 'text', 'We got your request and will call you at {phone}.', { live: true })
     ] },
     { key: 'switches', title: 'Switches', icon: 'toggle', intro: 'Turn parts of the site on and off. Nothing is deleted.', fields: [
       f('show.what', 'Main page: "What we do"', 'toggle', true, { live: true }),
@@ -93,11 +97,30 @@
       f('show.story', 'Main page: "Our story"', 'toggle', true, { live: true }),
       f('show.faq', 'Main page: questions & answers', 'toggle', true, { live: true }),
       f('show.feedbackButton', '"Leave feedback" buttons', 'toggle', true, { live: true }),
-      f('show.callButton', '"Request a call" buttons', 'toggle', true, { live: true }),
+      f('show.callButton', '"Contact us" buttons (phone, email, request a call back)', 'toggle', true, { live: true }),
       f('show.bookingMap', 'Bike animation card on the booking page ("More bikes, more streets")', 'toggle', false, { live: true }),
       f('maintenanceOn', 'Maintenance banner at the top of the site', 'toggle', false, { live: true }),
       f('maintenanceText', 'Maintenance banner text', 'text', 'We are updating the site. Some things may be slow for a little while.', { live: true }),
       f('featureDelivery', 'Future delivery business (drivers, stores, dispatch)', 'toggle', false, { help: 'Keep OFF for now. Takes effect the next time the site is opened.' })
+    ] },
+    { key: 'email', title: 'Email', icon: 'mail', intro: 'Emails to clients and to you. They go out once your email is connected (see the box below). Placeholders: {name} {company} {bikes} {dates} {total} {deposit} {balance} {invoice} {note} {business}.', fields: [
+      { k: '@emailstatus', type: 'part', label: 'Email connection' },
+      f('emailOn', 'Send emails', 'toggle', true, { live: true }),
+      f('emailFromName', 'From name', 'text', 'Media on Wheels', { live: true }),
+      f('emailReplyTo', 'Reply-to address (where clients\' answers go)', 'text', '', { live: true, help: 'e.g. your Gmail address.' }),
+      f('emailAdminTo', 'Send "new request" emails to', 'text', 'david7578433@gmail.com', { live: true }),
+      f('email.requested.subject', 'Request received: subject', 'text', 'Your bike request was received', { live: true, group: 'Request received (to the client)' }),
+      f('email.requested.body', 'Request received: text', 'textarea', 'Hi {name},\n\nThank you! We got your request for {bikes} bikes, {dates}. Total {total}.\nThis is a request, not a booking yet. We will review it and confirm soon. You pay the deposit ({deposit}) after we approve it.\n\n{business}', { live: true, group: 'Request received (to the client)' }),
+      f('email.newRequest.subject', 'New request: subject', 'text', 'New bike request: {company}, {bikes} bikes', { live: true, group: 'New request (to you)' }),
+      f('email.newRequest.body', 'New request: text', 'textarea', '{company} ({name}) asked for {bikes} bikes, {dates}. Total {total}.\nOpen Admin → Bookings to approve or decline.', { live: true, group: 'New request (to you)' }),
+      f('email.approved.subject', 'Approved: subject', 'text', 'Your bike request is approved', { live: true, group: 'Approved (to the client)' }),
+      f('email.approved.body', 'Approved: text', 'textarea', 'Hi {name},\n\nGood news: your request for {bikes} bikes, {dates}, is approved.\nPlease sign in and pay the deposit of {deposit} under My bookings. Balance later: {balance}.\n{note}\n\n{business}', { live: true, group: 'Approved (to the client)' }),
+      f('email.declined.subject', 'Declined: subject', 'text', 'About your bike request', { live: true, group: 'Declined (to the client)' }),
+      f('email.declined.body', 'Declined: text', 'textarea', 'Hi {name},\n\nSorry, we cannot take your request for {bikes} bikes, {dates}.\n{note}\nPlease contact us to find other dates.\n\n{business}', { live: true, group: 'Declined (to the client)' }),
+      f('email.invoice.subject', 'Invoice: subject', 'text', 'Invoice {invoice} from {business}', { live: true, group: 'Invoice (to the client)' }),
+      f('email.invoice.body', 'Invoice: text (the invoice lines are added below it)', 'textarea', 'Hi {name},\n\nHere is your invoice {invoice} for {bikes} bikes, {dates}.', { live: true, group: 'Invoice (to the client)' }),
+      f('email.test.subject', 'Test email: subject', 'text', 'Test email from {business}', { live: true, group: 'Test email' }),
+      f('email.test.body', 'Test email: text', 'textarea', 'If you can read this, the website can send emails.', { live: true, group: 'Test email' })
     ] },
     { key: 'seo', title: 'Google & sharing', icon: 'search', intro: 'How the site shows on Google and in shared links. The address stays mediaonwheelsnyc.com.', fields: [
       f('seoTitle', 'Page title (Google headline)', 'text', 'Media on Wheels · Ads on grocery-delivery bikes in Williamsburg & Boro Park', { live: true, max: 70 }),

@@ -75,9 +75,12 @@ test('"Leave feedback": website stars + comment AND our service stars + comment,
 test('"Request a call": name + phone required, best time + note optional; buttons on the main page, contact area, footer, client pages, after a booking', () => {
   const f = read('js/feedback.js'), home = read('js/home.js'), app = read('js/app.js'), client = read('js/client.js');
   for (const s of ['Request a call', 'Your name', 'Phone number', 'Best time to call (optional)', 'Short note (optional)', 'Please type your phone number.']) assert.ok(f.includes(s), s);
-  assert.match(home, /lnav-call" data-callreq="home-header"/); assert.match(home, /data-callreq="home-contact"/); assert.match(home, /data-callreq="home-footer"/); assert.match(home, /data-feedback="home"/);
+  /* Nov 8 2026 5:13 PM (David): "Take down 'Request a Call.' Put 'Contact Us'… also an option to request the call" — the call-back form stays, behind Contact us */
+  assert.match(home, /lnav-call" data-contact="home-header"/); assert.match(home, /data-contact="home-contact"/); assert.match(home, /data-contact="home-footer"/); assert.match(home, /data-feedback="home"/);
+  assert.match(f, /function openContact\(/); assert.match(f, /Request a call back/); assert.match(f, /openCallRequest\(\{ source: \(opts\.source \|\| 'site'\) \+ '-contact' \}\)/);
+  assert.ok(!/>Request a call<\/button>/.test(home), 'no "Request a call" button on the main page');
   assert.match(app, /role === 'client' && window\.Inbox/); assert.match(client, /data-feedback="booking"/);
-  assert.ok(!/mailto:|sms:|fetch\(/.test(f.replace(/href="mailto:' \+ esc\(x\.email\)/, '')), 'nothing sends email or texts');
+  assert.ok(!/sms:|fetch\(/.test(f), 'nothing sends texts; mailto/tel links only open the phone\'s own apps');
 });
 
 test('database: mow_feedback and mow_call_requests with RLS — anyone inserts, only the admin reads (and marks called)', () => {
@@ -137,7 +140,11 @@ test('main page: "Book bikes" only when signed in (Create an account when signed
   assert.ok(!render.includes('videos(c)'), 'no Videos section'); assert.ok(!h.includes('data-jump="videos"'), 'no Videos link');
   assert.ok(!/href="#\/login\/book" data-book>Book bikes/.test(h), 'no Book bikes for visitors');
   // run bookOrJoin
-  const fn = vm.runInContext('(' + h.match(/function bookOrJoin\(user, cls, short\) \{[\s\S]*?\n  \}/)[0] + ')', vm.createContext({}));
-  assert.match(fn(null, 'btn'), /href="#\/signup">Create an account</); assert.match(fn({ role: 'client' }, 'btn'), /href="#\/client\/book" data-book>Book bikes</);
+  const src = '(' + h.match(/function bookOrJoin\(user, cls, short\) \{[\s\S]*?\n  \}/)[0] + ')';
+  const fn = vm.runInContext(src, vm.createContext({ window: {} }));
+  /* Nov 8 2026 5:13 PM (David): a client REQUESTS bikes; the old "Book bikes" label comes back if Admin turns "request first" off */
+  assert.match(fn(null, 'btn'), /href="#\/signup">Create an account</); assert.match(fn({ role: 'client' }, 'btn'), /href="#\/client\/book" data-book>Request bikes</);
+  const old = vm.runInContext(src, vm.createContext({ window: { SiteSettings: { get: () => false } }, SiteSettings: { get: () => false } }));
+  assert.match(old({ role: 'client' }, 'btn'), /data-book>Book bikes</);
   assert.match(read('js/app.js'), /if \(parts\[0\] === 'client'\) return renderLogin\(app, true\);/);
 });
