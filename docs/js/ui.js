@@ -3,7 +3,11 @@
   'use strict';
 
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const money = (n) => (n < 0 ? '-' : '') + '$' + Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  /* Money is written in words (David's rule, Nov 8 2026): "1,500 dollars", or "1,500.50 dollars" when there are cents. */
+  const money = (n) => {
+    const v = Number(n) || 0, a = Math.abs(v), c = Math.round(a * 100) % 100 ? 2 : 0;
+    return (v < 0 ? '-' : '') + a.toLocaleString('en-US', { minimumFractionDigits: c, maximumFractionDigits: c }) + ' dollars';
+  };
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const fmtDate = (s, opts) => { if (!s) return ''; const d = new Date(s.length > 10 ? s : s + 'T12:00:00'); return d.toLocaleDateString('en-US', opts || { weekday: 'short', month: 'short', day: 'numeric' }); };

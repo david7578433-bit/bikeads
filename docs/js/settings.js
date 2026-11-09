@@ -8,6 +8,8 @@
 
   const AREAS = ['Williamsburg', 'Boro Park'];
   const BRAND = '#2f62a8';
+  const VIDEO_CREDIT = 'Video: the Dronalist, CC BY 3.0, via Wikimedia Commons';
+  const VIDEO_CREDIT_URL = 'https://commons.wikimedia.org/wiki/File:Aerial_view_of_MTA_Subway_Trains_on_Williamsburg_Bridge,_The_East_River,_Downtown_Manhattan,_Williamsburg_Brooklyn,_420_Kent,_Brooklyn_Shipyard,_Williamsburg_Bank,_New_York_City,_USA.webm';
   const PRESETS = [['Calm blue', '#2f62a8'], ['Navy', '#1e3a8a'], ['Indigo', '#4f46e5'], ['Green', '#15803d'], ['Teal', '#0f766e'], ['Red', '#b91c1c'], ['Orange', '#c2410c'], ['Gold', '#a16207'], ['Charcoal', '#334155']];
   /* Only fonts that are free (SIL Open Font License) and already saved in docs/fonts, plus the phone's own font. */
   const FONTS_BODY = [['Plus Jakarta Sans', 'Plus Jakarta Sans (OFL)'], ['Heebo', 'Heebo (OFL)'], ['system', "The phone's own font"]];
@@ -45,6 +47,9 @@
       f('homeContent.headline', 'Main headline', 'text', 'Your ad, riding every street', { live: true }),
       f('homeContent.subline', 'Text under the headline', 'textarea', 'We put your business on the grocery-delivery bikes of Williamsburg and Boro Park. Seen all day, on every block.', { live: true }),
       { k: '@homevideo', type: 'part', label: 'Main video (upload or link)' },
+      /* Nov 8 2026 5:15 PM (David: "take it down"): no credit line on the page; the free video's CC BY credit sits behind the footer's small "Credits" link. */
+      f('videoCredit', 'Video credit (behind the small "Credits" link at the bottom)', 'text', VIDEO_CREDIT, { live: true, help: 'The free default video needs this credit. With your own video the default credit hides by itself. Empty = no Credits link.' }),
+      f('videoCreditUrl', 'Video credit link (https, optional)', 'url', VIDEO_CREDIT_URL, { live: true }),
       f('heroPoster', 'Picture shown before the video plays (https link, optional)', 'url', '', { live: true, help: 'No pictures of women (tznius).' }),
       f('howSteps', '"How it works" steps', 'items', [
         { title: 'Pick your dates', text: 'Choose the days and how many bikes, on a calendar with English and Hebrew dates.' },

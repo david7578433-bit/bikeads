@@ -407,3 +407,7 @@ html, body { margin: 0; }
 .lnav-call + .lnav-cta { margin-left: 0; }
 @media (max-width: 479px) { .mow .lnav { gap: .5rem; } .mow .lnav-cta { padding: .45rem .95rem; } }
 @media (min-width: 760px) { .lnav-call { margin-left: 0; } }
+
+/* Nov 8 2026: the video credit lives behind the footer's small "Credits" link */
+.credits-line { margin: 0 0 1rem; line-height: 1.5; overflow-wrap: anywhere; }
+.credits-line a { color: var(--ink2); }

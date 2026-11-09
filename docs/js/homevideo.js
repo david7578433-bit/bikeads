@@ -33,6 +33,28 @@
 
   const HomeVideo = {
     DEFAULT,
+    /* The video credit, shown only behind the footer's small "Credits" link (Nov 8 2026, David: "take it down" about the
+     * credit line on the main page). Text and link are admin settings (Site content). The default credit belongs to the
+     * default video: with an uploaded file or a pasted link it hides by itself. Empty text = no credit at all. */
+    credit() {
+      const s = Data.settings();
+      const custom = (s.homeVideoMode || 'default') !== 'default';
+      const SS = window.SiteSettings;
+      const text = String(SS ? SS.get('videoCredit') : DEFAULT.credit).trim();
+      let url = String(SS ? SS.get('videoCreditUrl') : DEFAULT.creditUrl).trim();
+      if (!text || (custom && text === DEFAULT.credit)) return null;
+      if (custom && url === DEFAULT.creditUrl) url = '';
+      return { text, url: okUrl(url) ? url : '' };
+    },
+    creditHtml() {
+      const c = HomeVideo.credit(); if (!c) return '';
+      const e = UI.esc;
+      return '<p class="credits-line">' + (c.url ? '<a href="' + e(c.url) + '" target="_blank" rel="noopener">' + e(c.text) + '</a>' : e(c.text)) + '</p>';
+    },
+    openCredits() {
+      const h = HomeVideo.creditHtml(); if (!h) return;
+      UI.modal('Credits', h + '<div class="row-end"><button type="button" class="btn" data-close>Close</button></div>', { noFocus: true });
+    },
     /* What the main page plays now: an uploaded file, a pasted link, or the default footage. */
     async current() {
       const s = Data.settings();
@@ -45,10 +67,10 @@
       }
       if (mode === 'file') { const f = await getFile('video'); if (f) return { kind: 'file', src: blobUrl(f), poster, name: s.homeVideoName || 'Uploaded video' }; }
       if (mode === 'url' && okUrl(s.homeVideoUrl)) return { kind: 'url', src: s.homeVideoUrl.trim(), poster };
-      return { kind: 'default', src: phone ? DEFAULT.phone : DEFAULT.src, poster: DEFAULT.poster, credit: DEFAULT.credit, creditUrl: DEFAULT.creditUrl };
+      return { kind: 'default', src: phone ? DEFAULT.phone : DEFAULT.src, poster: DEFAULT.poster };
     },
     /* Fill a <video> on the main page. Reduced motion: no autoplay, the still poster stays. */
-    async mount(video, creditEl) {
+    async mount(video) { /* no credit on the video itself (Nov 8 2026): it is behind the footer's Credits link */
       if (!video) return;
       const v = await HomeVideo.current();
       const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -56,7 +78,6 @@
       if (v.poster) video.poster = v.poster;
       video.preload = reduce ? 'none' : 'auto';
       video.src = v.src;
-      if (creditEl) { creditEl.innerHTML = v.credit ? '<a href="' + v.creditUrl + '" target="_blank" rel="noopener">' + v.credit + '</a>' : ''; creditEl.hidden = !v.credit; }
       if (!reduce) { video.autoplay = true; const p = video.play(); if (p && p.catch) p.catch(() => { /* the poster stays */ }); }
       video.addEventListener('error', () => { if (v.kind !== 'default') { video.src = DEFAULT.src; video.poster = DEFAULT.poster; } }, { once: true });
     },

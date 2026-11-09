@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   const { esc, $, $$, toast } = UI;
-  const money = (n) => (Number(n) % 1 ? UI.money(n) : '$' + Math.round(Number(n) || 0).toLocaleString('en-US'));
+  const money = (n) => UI.money(n); /* "150 dollars" (Nov 8 2026: money written as dollars) */
 
   const DEFAULTS = {
     headline: 'Your ad, riding every street',
@@ -58,7 +58,7 @@
       '<div class="hero-copy"><span class="hero-kicker">' + esc((window.SiteSettings && (SiteSettings.get('heroKicker') || SiteSettings.areasText())) || 'Williamsburg & Boro Park') + '</span>' +
       '<h1 id="hero-h">' + esc(c.headline) + '</h1><p>' + esc(c.subline) + '</p>' +
       '<div class="hero-cta">' + bookOrJoin(user, 'btn primary big pill') + '<a class="btn big pill white" href="#prices" data-jump="prices">See prices</a></div></div>' +
-      '<span class="video-credit" id="video-credit" hidden></span></div></section>';
+      '</div></section>';
   }
 
   /* Nov 8 2026 (David): "Only if you are signed in can you press Book Bikes". Signed out: "Create an account" instead. */
@@ -163,7 +163,7 @@
 
   function foot() {
     const ft = window.SiteSettings ? String(SiteSettings.get('footerText') || '').trim() : '';
-    return '<footer class="lfoot"><span>' + logo + esc(brand()) + '</span>' + (ft ? '<span class="lfoot-text">' + esc(ft) + '</span>' : '') + '<span class="muted small">Main video: <a href="' + HomeVideo.DEFAULT.creditUrl + '" target="_blank" rel="noopener">' + esc(HomeVideo.DEFAULT.credit) + '</a></span><span class="lfoot-links"><button type="button" class="linkish" data-feedback="home">Leave feedback</button><button type="button" class="linkish" data-contact="home-footer">Contact us</button><a href="#/login">Log in</a></span></footer>';
+    return '<footer class="lfoot"><span>' + logo + esc(brand()) + '</span>' + (ft ? '<span class="lfoot-text">' + esc(ft) + '</span>' : '') + '<span class="lfoot-links"><button type="button" class="linkish" data-feedback="home">Leave feedback</button><button type="button" class="linkish" data-contact="home-footer">Contact us</button><a href="#/login">Log in</a>' + (window.HomeVideo && HomeVideo.credit() ? '<button type="button" class="linkish" data-credits>Credits</button>' : '') + '</span></footer>';
   }
 
   function dock(user) {
@@ -177,7 +177,8 @@
       const c = content();
       document.title = (window.SiteSettings && SiteSettings.pageTitle) || (brand() + ' · Ads on grocery-delivery bikes in Williamsburg & Boro Park'); /* Admin → Google & sharing */
       app.innerHTML = '<main class="auth home v4 mow">' + nav(user) + '<div class="lpanel">' + hero(c, user) + what() + how() + prices(user) + /* Nov 8 2026 (David: "take this down"): no Videos section */ reach(c) + feedback(c) + why() + story(c) + faq() + contact(c, user) + '</div>' + foot() + dock(user) + '</main>';
-      if (window.HomeVideo) HomeVideo.mount($('#hero-video'), $('#video-credit'));
+      if (window.HomeVideo) HomeVideo.mount($('#hero-video'));
+      $$('[data-credits]', app).forEach((b) => b.addEventListener('click', () => HomeVideo.openCredits()));
       $$('[data-jump]', app).forEach((l) => l.addEventListener('click', (e) => {
         const t = document.getElementById(l.getAttribute('data-jump')); if (!t) return;
         e.preventDefault(); t.scrollIntoView({ behavior: smooth(), block: 'start' });

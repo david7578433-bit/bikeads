@@ -274,8 +274,8 @@
       '<div class="two"><label>From<input class="input" type="date" name="start" required value="' + st + '"></label><label>Till<input class="input" type="date" name="end" required value="' + en + '"></label></div>' +
       '<fieldset><legend>Bikes</legend><div class="bike-pick" id="bkpick"></div></fieldset>' +
       '<div class="two"><label>Status<select class="select" name="status">' + ['pending', 'approved', 'declined', 'completed', 'cancelled'].map((s) => '<option value="' + s + '"' + ((b ? b.status : 'approved') === s ? ' selected' : '') + '>' + UI.STATUS_LABEL[s] + '</option>').join('') + '</select></label>' +
-      '<label>Price per bike per day ($)<input class="input" type="number" step="0.01" min="0" name="pricePerDay" value="' + (b ? b.pricePerDay : Data.settings().pricePerBikeDay) + '"></label></div>' +
-      '<div class="two"><label>Total ($)<input class="input" type="number" step="0.01" min="0" name="total" value="' + (b ? b.total : 0) + '"></label><label>Deposit ($)<input class="input" type="number" step="0.01" min="0" name="deposit" value="' + (b ? b.deposit : 0) + '"></label></div>' +
+      '<label>Price per bike per day (dollars)<input class="input" type="number" step="0.01" min="0" name="pricePerDay" value="' + (b ? b.pricePerDay : Data.settings().pricePerBikeDay) + '"></label></div>' +
+      '<div class="two"><label>Total (dollars)<input class="input" type="number" step="0.01" min="0" name="total" value="' + (b ? b.total : 0) + '"></label><label>Deposit (dollars)<input class="input" type="number" step="0.01" min="0" name="deposit" value="' + (b ? b.deposit : 0) + '"></label></div>' +
       '<button type="button" class="btn ghost small-btn" id="recalc">Recalculate total and ' + Data.settings().depositPct + '% deposit</button>' +
       '<label class="check"><input type="checkbox" name="depositPaid"' + (b && b.depositPaid ? ' checked' : '') + '> Deposit received</label>' +
       (b && b.adText ? '<div class="small campaign-text"><strong>Campaign description (from the client)</strong><br>' + esc(b.adText) + '</div>' : '') +
@@ -380,7 +380,7 @@
     const bks = Data.list('bookings').filter((b) => b.status !== 'declined').sort((a, b) => b.start.localeCompare(a.start));
     const m = modal(t ? 'Edit transaction' : 'New transaction', '<form id="txform" class="form">' +
       '<div class="seg big" role="radiogroup"><label><input type="radio" name="dir" value="in"' + (!t || t.amount >= 0 ? ' checked' : '') + '> Money in</label><label><input type="radio" name="dir" value="out"' + (t && t.amount < 0 ? ' checked' : '') + '> Money out</label></div>' +
-      '<div class="two"><label>Date<input class="input" type="date" name="date" required value="' + (t ? t.date : Data.today()) + '"></label><label>Amount ($)<input class="input" type="number" step="0.01" min="0" name="amount" required inputmode="decimal" value="' + (t ? Math.abs(t.amount) : '') + '"></label></div>' +
+      '<div class="two"><label>Date<input class="input" type="date" name="date" required value="' + (t ? t.date : Data.today()) + '"></label><label>Amount (dollars)<input class="input" type="number" step="0.01" min="0" name="amount" required inputmode="decimal" value="' + (t ? Math.abs(t.amount) : '') + '"></label></div>' +
       '<label>Description<input class="input" name="description" required value="' + esc(t ? t.description : '') + '" placeholder="e.g. Deposit from Fresh Basket"></label>' +
       '<label>Category<input class="input" name="category" list="dl-cat" value="' + esc(t ? t.category : '') + '"><datalist id="dl-cat">' + CATS.map((c) => '<option value="' + esc(c) + '">').join('') + '</datalist></label>' +
       '<label>Linked booking (optional)<select class="select" name="bookingId"><option value="">None</option>' + bks.map((b) => '<option value="' + b.id + '"' + (t && t.bookingId === b.id ? ' selected' : '') + '>' + esc(b.company + ' · ' + fmtRange(b.start, b.end)) + '</option>').join('') + '</select></label>' +
@@ -399,7 +399,7 @@
   function reconcile() {
     const s = Data.settings();
     const m = modal('Reconcile with your bank statement', '<form id="recform" class="form"><p class="muted">Enter the date and ending balance from your bank statement, then tick every transaction that is on it. When the difference is 0.00 you are reconciled.</p>' +
-      '<div class="two"><label>Statement date<input class="input" type="date" name="date" value="' + Data.today() + '"></label><label>Statement ending balance ($)<input class="input" type="number" step="0.01" name="bal" inputmode="decimal" placeholder="0.00"></label></div>' +
+      '<div class="two"><label>Statement date<input class="input" type="date" name="date" value="' + Data.today() + '"></label><label>Statement ending balance (dollars)<input class="input" type="number" step="0.01" name="bal" inputmode="decimal" placeholder="0.00"></label></div>' +
       '<div id="reclist" class="rec-list"></div><div class="rec-sum" id="recsum"></div>' +
       '<div class="row-end"><button type="button" class="btn ghost" data-close>Close</button><button class="btn primary" id="recdone" disabled>Finish reconciliation</button></div></form>');
     const f = m.querySelector('#recform');
@@ -533,13 +533,13 @@
     root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>Settings</h1></div>' +
       '<form class="card form" id="setform"><h2>Business &amp; prices</h2>' +
       '<label>Business name<input class="input" name="businessName" value="' + esc(s.businessName) + '"></label>' +
-      '<div class="two"><label>Price per bike per day ($)<input class="input" type="number" step="0.01" min="0" name="pricePerBikeDay" value="' + s.pricePerBikeDay + '"></label>' +
+      '<div class="two"><label>Price per bike per day (dollars)<input class="input" type="number" step="0.01" min="0" name="pricePerBikeDay" value="' + s.pricePerBikeDay + '"></label>' +
       '<label>Deposit due at booking (%)<input class="input" type="number" step="1" min="0" max="100" name="depositPct" value="' + (s.depositPct == null ? 20 : s.depositPct) + '"></label></div>' +
-      '<label>Bank opening balance ($)<input class="input" type="number" step="0.01" name="openingBalance" value="' + (s.openingBalance || 0) + '"></label>' +
+      '<label>Bank opening balance (dollars)<input class="input" type="number" step="0.01" name="openingBalance" value="' + (s.openingBalance || 0) + '"></label>' +
       '<h2 style="margin-top:.6rem">Client checkout prices</h2>' +
       (s.pricesAreSamples ? '<div class="sample-note" role="note"><span aria-hidden="true">ℹ️</span><span><strong>These are sample prices.</strong> Type your real prices and save; clients see them on the price page.</span></div>' : '') +
-      '<div class="two"><label>Printing &amp; setup, per bike, one time ($)<input class="input" type="number" step="0.01" min="0" name="setupFeePerBike" value="' + (s.setupFeePerBike != null ? s.setupFeePerBike : 150) + '"></label>' +
-      '<label>Weekly charge, per bike per week ($)<input class="input" type="number" step="0.01" min="0" name="weeklyPerBike" value="' + (s.weeklyPerBike != null ? s.weeklyPerBike : 75) + '"></label>' +
+      '<div class="two"><label>Printing &amp; setup, per bike, one time (dollars)<input class="input" type="number" step="0.01" min="0" name="setupFeePerBike" value="' + (s.setupFeePerBike != null ? s.setupFeePerBike : 150) + '"></label>' +
+      '<label>Weekly charge, per bike per week (dollars)<input class="input" type="number" step="0.01" min="0" name="weeklyPerBike" value="' + (s.weeklyPerBike != null ? s.weeklyPerBike : 75) + '"></label>' +
       '<label>Minimum bikes per client booking<input class="input" type="number" step="1" min="1" name="minBikes" value="' + (s.minBikes || 5) + '"></label></div>' +
       '<label class="check"><input type="checkbox" name="pricesAreSamples"' + (s.pricesAreSamples ? ' checked' : '') + '> Still sample prices (shows a "sample prices" note to clients)</label>' +
       '<div class="row-end"><button class="btn primary">Save settings</button></div></form>' +
