@@ -349,3 +349,6 @@ html, body { margin: 0; }
 .promo-row { display: flex; gap: .5rem; margin-top: .3rem; }
 .promo-row .input { flex: 1; min-width: 0; text-transform: uppercase; }
 #promo-msg { margin: .3rem 0 0; color: #047857; min-height: 1.2em; }
+/* Nov 8 2026: optional campaign description (step 1) — keep the client's line breaks */
+.campaign-text, .campaign-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+#det textarea[name=campaign] { min-height: 92px; padding-top: .7rem; }

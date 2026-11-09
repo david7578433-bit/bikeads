@@ -196,9 +196,33 @@ test('booking step 1 asks only business / company name, email and phone (client,
   const i = c.indexOf('function renderDetails'), j = c.indexOf('function renderDates');
   const step1 = c.slice(i, j);
   for (const s of ['Business / company name', 'Email address', 'Phone number']) assert.ok(step1.includes(s), s);
-  for (const s of ['Where should the bikes ride?', 'Streets or blocks you want', 'What the ad says', 'name="area"', 'name="areaNote"', 'name="adText"', 'Contact name']) assert.ok(!step1.includes(s), 'removed: ' + s);
+  for (const s of ['Where should the bikes ride?', 'Streets or blocks you want', 'What the ad says', 'name="area"', 'name="areaNote"', 'name="adText"', 'Contact name', 'What the ad says']) assert.ok(!step1.includes(s), 'removed: ' + s);
   assert.strictEqual((step1.match(/<input /g) || []).length, 3, 'exactly three inputs');
+  assert.strictEqual((step1.match(/<textarea /g) || []).length, 1, 'plus one campaign description box');
   assert.ok(!step1.includes('Please pick where the bikes should ride'), 'no area validation');
   // confirmation shows the Area row only for old bookings that have one
   assert.ok(c.includes("(b.areaName || b.areaNote ? '<dt>Area</dt>"));
+});
+
+test('booking step 1 has an optional "Campaign description" box, saved and shown everywhere (client, Nov 8 2026 3:58 PM)', () => {
+  const c = read('js/client.js');
+  const i = c.indexOf('function renderDetails'), j = c.indexOf('function renderDates');
+  const step1 = c.slice(i, j);
+  assert.ok(step1.includes('<label>Campaign description<textarea class="input" name="campaign" rows="3"'), 'textarea, 3 rows');
+  assert.ok(step1.includes("(optional)"), 'optional placeholder');
+  assert.ok(!/name="campaign"[^>]*required/.test(step1), 'not required');
+  // placed after the phone field
+  assert.ok(step1.indexOf('name="campaign"') > step1.indexOf('name="phone"'), 'after phone');
+  // validation does not ask for it
+  assert.ok(!/campaign[^\n]*err\.textContent/.test(step1), 'no campaign validation');
+  // saved on the booking's existing adText field
+  assert.ok(step1.includes('adText: f.campaign.value.trim()'), 'saved into wiz.biz.adText');
+  assert.ok(c.includes("adText: b.adText || ''"), 'booking record keeps adText');
+  // shown when filled: price summary, confirmation, My bookings, admin row + admin booking view
+  assert.ok(c.includes("wiz.biz && wiz.biz.adText ? '<span class=\"campaign-line\">Campaign: '"), 'price summary');
+  assert.ok(c.includes("(b.adText ? '<dt>Campaign</dt>"), 'confirmation');
+  assert.ok(c.includes("(b.adText ? '<div class=\"small campaign-text\">Campaign: '"), 'My bookings');
+  const a = read('js/admin.js');
+  assert.ok(a.includes("(b.adText ? '<div class=\"small campaign-text\">Campaign: '"), 'admin booking line');
+  assert.ok(a.includes('Campaign description (from the client)'), 'admin booking view');
 });
