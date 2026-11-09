@@ -8,8 +8,8 @@
 
   const AREAS = ['Williamsburg', 'Boro Park'];
   const BRAND = '#2f62a8';
-  const VIDEO_CREDIT = 'Video: the Dronalist, CC BY 3.0, via Wikimedia Commons';
-  const VIDEO_CREDIT_URL = 'https://commons.wikimedia.org/wiki/File:Aerial_view_of_MTA_Subway_Trains_on_Williamsburg_Bridge,_The_East_River,_Downtown_Manhattan,_Williamsburg_Brooklyn,_420_Kent,_Brooklyn_Shipyard,_Williamsburg_Bank,_New_York_City,_USA.webm';
+  const VIDEO_CREDIT = 'Street video: Metro Drive / YouTube, CC BY';
+  const VIDEO_CREDIT_URL = 'https://www.youtube.com/watch?v=7AW62YT1bG0';
   const PRESETS = [['Calm blue', '#2f62a8'], ['Navy', '#1e3a8a'], ['Indigo', '#4f46e5'], ['Green', '#15803d'], ['Teal', '#0f766e'], ['Red', '#b91c1c'], ['Orange', '#c2410c'], ['Gold', '#a16207'], ['Charcoal', '#334155']];
   /* Only fonts that are free (SIL Open Font License) and already saved in docs/fonts, plus the phone's own font. */
   const FONTS_BODY = [['Plus Jakarta Sans', 'Plus Jakarta Sans (OFL)'], ['Heebo', 'Heebo (OFL)'], ['system', "The phone's own font"]];

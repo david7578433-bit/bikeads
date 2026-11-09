@@ -26,10 +26,10 @@ test('admin menu: every section David asked for is in the menu, older pages kept
   assert.match(m, /const BOTTOM = \['dashboard', 'bookings', 'inbox', 'bikes'\]/, 'phone bottom bar + Menu');
   assert.match(m, /Find a setting/, 'search box');
   const html = read('index.html');
-  for (const f of ['js/settings.js', 'js/admin-forms.js', 'js/admin-menu.js', 'js/mailer.js', 'admin.css']) assert.match(html, new RegExp(f.replace('.', '\\.') + '\\?v=1[6-9]'), f);
+  for (const f of ['js/settings.js', 'js/admin-forms.js', 'js/admin-menu.js', 'js/mailer.js', 'admin.css']) assert.match(html, new RegExp(f.replace('.', '\\.') + '\\?v=(1[6-9]|[2-9]\\d)'), f);
   assert.ok(html.indexOf('js/admin-menu.js') > html.indexOf('js/admin.js') && html.indexOf('js/admin-menu.js') < html.indexOf('js/platform.js'), 'menu loads after admin.js, before the Deliver plugin');
   assert.ok(html.indexOf('js/settings.js') > html.indexOf('js/data.js'));
-  assert.match(read('sw.js'), /bikeads-v1[6-9]/);
+  assert.match(read('sw.js'), /bikeads-v(1[6-9]|[2-9]\d)/);
   assert.match(read('sw.js'), /"js\/admin-menu\.js"/);
 });
 

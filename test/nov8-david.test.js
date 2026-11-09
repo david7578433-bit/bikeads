@@ -46,7 +46,7 @@ test('calendar is a normal calendar: no holiday list or legend, a tiny dot on ho
 
 test('"Leave feedback": website stars + comment AND our service stars + comment, optional name/email, saved, admin reads it', async () => {
   const f = read('js/feedback.js'), html = read('index.html'), sw = read('sw.js');
-  assert.match(html, /js\/feedback\.js\?v=1[5-9]/); assert.match(sw, /"js\/feedback\.js"/);
+  assert.match(html, /js\/feedback\.js\?v=(1[5-9]|[2-9]\d)/); assert.match(sw, /"js\/feedback\.js"/);
   for (const s of ['Leave feedback', 'The website', 'Our service', 'How good are we?', "starsInput('site'", "starsInput('service'", 'name="siteComment"', 'name="serviceComment"', 'Your name (optional)', 'Email (optional)']) assert.ok(f.includes(s), s);
   assert.match(f, /for \(let i = 5; i >= 1; i--\)/, 'stars 1 to 5');
   // this-device mode: saved in the feedback collection

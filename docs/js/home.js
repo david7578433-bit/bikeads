@@ -108,7 +108,7 @@
     const extra = c.videos.filter((v) => okHttps(v.url));
     return '<section class="sec" id="videos" aria-labelledby="videos-h">' + head('videos', 'Videos', 'The streets our bikes ride, and how your ad looks on them.') +
       '<div class="grid2 vids">' +
-      '<figure class="vid"><div class="vid-box"><video controls muted playsinline preload="none" poster="' + HomeVideo.DEFAULT.poster + '" src="' + HomeVideo.DEFAULT.phone + '"></video></div><figcaption><b>Williamsburg from above</b><span>Real footage · ' + esc(HomeVideo.DEFAULT.credit) + '</span></figcaption></figure>' +
+      '<figure class="vid"><div class="vid-box"><video controls muted playsinline preload="none" poster="' + (HomeVideo.WBURG_DRONE || HomeVideo.DEFAULT).poster + '" src="' + (HomeVideo.WBURG_DRONE || HomeVideo.DEFAULT).phone + '"></video></div><figcaption><b>Williamsburg from above</b><span>Real footage · ' + esc((HomeVideo.WBURG_DRONE || HomeVideo.DEFAULT).credit) + '</span></figcaption></figure>' +
       '<figure class="vid"><div class="vid-box ride-box"><div class="hero-ride" id="hero-ride"></div></div><figcaption><b>See your ad ride</b><span>Bikes with sample ads on the real streets of Williamsburg · Streets © OpenStreetMap contributors</span></figcaption></figure>' +
       extra.map((v) => '<figure class="vid"><div class="vid-box">' + (okVideo(v.url) ? '<video controls muted playsinline preload="metadata" src="' + esc(v.url.trim()) + '"></video>' : '<a class="vid-link" href="' + esc(v.url.trim()) + '" target="_blank" rel="noopener">▶ Watch</a>') + '</div><figcaption><b>' + esc(v.title || 'Video') + '</b></figcaption></figure>').join('') +
       '</div></section>';

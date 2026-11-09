@@ -1,11 +1,19 @@
-/* BikeAds v4: main page video. Default = real drone footage of Williamsburg (the Dronalist, CC BY 3.0,
- * Wikimedia Commons). The admin can upload an MP4/WebM (kept in this browser's IndexedDB) or paste a video
+/* BikeAds v4: main page video. Default (Nov 9 2026) = a 10 s street drive through Boro Park ("Borough Park, Brooklyn
+ * in 4K" by Metro Drive, YouTube, CC BY; source 3:44.0–3:54.5, checked frame by frame at 4 fps: no women or girls in
+ * it), soft crossfade at the loop point. The earlier Williamsburg drone clip (the Dronalist, CC BY 3.0, Wikimedia
+ * Commons) is kept in media/ as WBURG_DRONE. The admin can upload an MP4/WebM (kept in this browser's IndexedDB) or paste a video
  * link (kept in Settings). Demo storage: an uploaded file shows only on this browser until a shared
  * storage backend is connected — the same swappable data layer as the rest of the demo. */
 (function () {
   'use strict';
   const DB = 'bikeads-media', STORE = 'files';
   const DEFAULT = {
+    src: 'media/hero-boropark.mp4', phone: 'media/hero-boropark-phone.mp4', poster: 'media/hero-poster-boropark.jpg',
+    credit: 'Street video: Metro Drive / YouTube, CC BY',
+    creditUrl: 'https://www.youtube.com/watch?v=7AW62YT1bG0'
+  };
+  /* The previous default, kept (files still in media/). */
+  const WBURG_DRONE = {
     src: 'media/hero-williamsburg.mp4', phone: 'media/hero-williamsburg-phone.mp4', poster: 'media/hero-poster.jpg',
     credit: 'Video: the Dronalist, CC BY 3.0, via Wikimedia Commons',
     creditUrl: 'https://commons.wikimedia.org/wiki/File:Aerial_view_of_MTA_Subway_Trains_on_Williamsburg_Bridge,_The_East_River,_Downtown_Manhattan,_Williamsburg_Brooklyn,_420_Kent,_Brooklyn_Shipyard,_Williamsburg_Bank,_New_York_City,_USA.webm'
@@ -32,7 +40,7 @@
   const okUrl = (u) => /^https:\/\/[^\s"'<>]+$/i.test(String(u || '').trim());
 
   const HomeVideo = {
-    DEFAULT,
+    DEFAULT, WBURG_DRONE,
     /* The video credit, shown only behind the footer's small "Credits" link (Nov 8 2026, David: "take it down" about the
      * credit line on the main page). Text and link are admin settings (Site content). The default credit belongs to the
      * default video: with an uploaded file or a pasted link it hides by itself. Empty text = no credit at all. */
@@ -90,7 +98,7 @@
       const s = Data.settings();
       const mode = s.homeVideoMode || 'default';
       const cur = await HomeVideo.current();
-      const label = cur.kind === 'file' ? 'Your uploaded video (' + esc(cur.name) + ')' : cur.kind === 'url' ? 'Your video link' : 'Default: drone footage over Williamsburg';
+      const label = cur.kind === 'file' ? 'Your uploaded video (' + esc(cur.name) + ')' : cur.kind === 'url' ? 'Your video link' : 'Default: street drive through Boro Park';
       host.innerHTML = '<h2>Main page video</h2><p class="muted">The big video at the top of the main page. Upload your own street video, or paste a link to one.</p>' +
         '<div class="hv-preview"><video id="hv-prev" muted loop playsinline controls preload="metadata"' + (cur.poster ? ' poster="' + esc(cur.poster) + '"' : '') + ' src="' + esc(cur.src) + '"></video></div>' +
         '<p class="hv-now">Now showing: <strong>' + label + '</strong></p>' +

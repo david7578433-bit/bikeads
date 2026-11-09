@@ -52,9 +52,9 @@ test('credit text is an admin setting; the default credit hides with your own vi
   const s = read('js/settings.js');
   assert.match(s, /f\('videoCredit', /); assert.match(s, /f\('videoCreditUrl', /);
   let HV = loadVideo({});
-  assert.strictEqual(HV.credit().text, 'Video: the Dronalist, CC BY 3.0, via Wikimedia Commons');
-  assert.match(HV.credit().url, /^https:\/\/commons\.wikimedia\.org\//);
-  assert.match(HV.creditHtml(), /<a href="https:\/\/commons[^>]+>Video: the Dronalist/);
+  assert.strictEqual(HV.credit().text, 'Street video: Metro Drive / YouTube, CC BY');
+  assert.strictEqual(HV.credit().url, 'https://www.youtube.com/watch?v=7AW62YT1bG0');
+  assert.match(HV.creditHtml(), /<a href="https:\/\/www\.youtube\.com\/watch\?v=7AW62YT1bG0"[^>]+>Street video: Metro Drive/);
   HV = loadVideo({ homeVideoMode: 'url', homeVideoUrl: 'https://x.test/v.mp4' });
   assert.strictEqual(HV.credit(), null, 'own video: default credit hides by itself');
   HV = loadVideo({ homeVideoMode: 'url', homeVideoUrl: 'https://x.test/v.mp4', videoCredit: 'Video: Metro Drive / YouTube, CC BY' });
