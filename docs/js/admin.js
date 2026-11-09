@@ -64,7 +64,8 @@
   function renderBikes(root) {
     const bikes = Data.list('bikes').sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
     const locs = Data.list('locations');
-    root.innerHTML = '<section class="page"><div class="page-head"><h1>Bikes &amp; trackers</h1><button class="btn primary" id="addbike">+ Add bike</button></div>' +
+    root.innerHTML = '<section class="page"><div class="page-head"><h1>Bikes &amp; trackers</h1><div class="head-tools"><button class="btn ghost" id="areas">Areas</button><button class="btn primary" id="addbike">+ Add bike</button></div></div>' +
+      (bikes.length ? '' : '<div class="card muted">No bikes yet. Tap “+ Add bike”. A tracker number is optional.</div>') +
       simNotice() +
       '<div class="cards">' + bikes.map((b) => {
         const loc = locs.find((l) => l.id === b.locationId);
@@ -72,12 +73,16 @@
           '<dl class="kv"><dt>Location</dt><dd>' + esc(loc ? loc.name : '—') + '</dd>' +
           '<dt><span class="sw red"></span> Advertiser</dt><dd>' + esc(b.advertiser || '—') + '</dd>' +
           '<dt><span class="sw blue"></span> Marketing</dt><dd>' + esc(b.marketing || '—') + '</dd>' +
+          (b.route ? '<dt>Route</dt><dd>' + esc(b.route) + '</dd>' : '') + '<dt>Active</dt><dd>' + (b.active === false ? '<span class="badge st-declined">Inactive</span>' : 'Yes, can be booked') + '</dd>' +
           '<dt>Last position</dt><dd>' + (b.position ? (b.position.source === 'manual' ? 'by hand' : b.position.source === 'live' ? 'live GPS' : 'simulated') + ', ' + ago(b.position.at) : 'none yet') + '</dd></dl>' +
-          '<div class="row-end"><button class="btn ghost" data-del="' + b.id + '">Delete</button><button class="btn" data-edit="' + b.id + '">Edit</button></div></article>';
+          '<div class="row-end"><button class="btn ghost" data-del="' + b.id + '">Delete</button><button class="btn ghost" data-active="' + b.id + '">' + (b.active === false ? 'Make active' : 'Make inactive') + '</button><button class="btn" data-edit="' + b.id + '">Edit</button></div></article>';
       }).join('') + '</div>' +
       '<div class="card info"><h2>Connecting your real trackers</h2><p>Each bike is matched to its GPS tracker by the tracker ID (usually the IMEI printed on the device or its box). Once we know the tracker brand, live positions replace the simulator automatically — nothing else changes.</p></div></section>';
     $('#addbike', root).addEventListener('click', () => editBike(null, () => App.render()));
+    $('#areas', root).addEventListener('click', () => (window.AdminMenu ? AdminMenu.manageAreas(() => App.render()) : null));
     root.addEventListener('click', (e) => {
+      const ac = e.target.closest('[data-active]');
+      if (ac) { const b = Data.bike(ac.getAttribute('data-active')); Data.put('bikes', { id: b.id, active: b.active === false }); toast(b.active === false ? 'Bike #' + b.number + ' is active again' : 'Bike #' + b.number + ' is inactive: clients cannot book it'); App.render(); return; }
       const ed = e.target.closest('[data-edit]'); if (ed) editBike(ed.getAttribute('data-edit'), () => App.render());
       const del = e.target.closest('[data-del]');
       if (del) {
@@ -100,6 +105,9 @@
       '<label>Location<select class="select" name="locationId">' + locs.map((l) => '<option value="' + l.id + '"' + (b && b.locationId === l.id ? ' selected' : '') + '>' + esc(l.name) + '</option>').join('') + '</select></label>' +
       '<label><span><span class="sw red"></span> Red flag: advertising company</span><input class="input" name="advertiser" list="dl-adv" value="' + esc(b ? b.advertiser : '') + '"></label>' +
       '<label><span><span class="sw blue"></span> Blue flag: marketing company</span><input class="input" name="marketing" list="dl-mkt" value="' + esc(b ? b.marketing : '') + '"></label>' +
+      /* Nov 8 2026 (admin menu): optional route / streets, and active = can be booked */
+      '<label>Route / streets (optional)<input class="input" name="route" value="' + esc(b ? b.route || '' : '') + '" placeholder="e.g. Lee Ave, Bedford Ave"></label>' +
+      '<label class="check"><input type="checkbox" name="active"' + (!b || b.active !== false ? ' checked' : '') + '> Active (clients can book this bike)</label>' +
       '<label>Notes<textarea class="input" name="notes" rows="2">' + esc(b ? b.notes : '') + '</textarea></label>' +
       '<datalist id="dl-adv">' + advertisers.map((a) => '<option value="' + esc(a) + '">').join('') + '</datalist>' +
       '<datalist id="dl-mkt">' + marketers.map((a) => '<option value="' + esc(a) + '">').join('') + '</datalist>' +
@@ -108,6 +116,7 @@
       e.preventDefault();
       const fd = Object.fromEntries(new FormData(e.target).entries());
       Object.keys(fd).forEach((k) => { fd[k] = String(fd[k]).trim(); });
+      fd.active = !!e.target.active.checked;
       if (!fd.number) { toast('Please type the bike number'); return; }
       const clash = Data.list('bikes').find((x) => x.id !== (b && b.id) && ((fd.trackerId && x.trackerId === fd.trackerId) || x.number === fd.number));
       if (clash) { toast(fd.trackerId && clash.trackerId === fd.trackerId ? 'That tracker ID is already on bike #' + clash.number : 'Bike number already used'); return; }
@@ -126,13 +135,14 @@
     const pending = Data.list('bookings').filter((b) => b.status === 'pending');
     root.innerHTML = '<section class="page"><div class="page-head"><h1>Bookings</h1><div class="head-tools">' +
       '<div class="seg" role="tablist"><button role="tab" class="' + (view.bkMode === 'calendar' ? 'on' : '') + '" data-mode="calendar" aria-selected="' + (view.bkMode === 'calendar') + '">Calendar</button><button role="tab" class="' + (view.bkMode === 'list' ? 'on' : '') + '" data-mode="list" aria-selected="' + (view.bkMode === 'list') + '">List</button></div>' +
-      '<button class="btn primary" id="addbk">+ Add booking</button></div></div>' +
+      '<button class="btn ghost" id="bkcsv">Export CSV</button><button class="btn primary" id="addbk">+ Add booking</button></div></div>' +
       (pending.length ? '<div class="card pending-box"><h2>' + pending.length + ' request' + (pending.length > 1 ? 's' : '') + ' waiting for you</h2>' + pending.sort((a, b) => a.start.localeCompare(b.start)).map(bookingRow).join('') + '</div>' : '<div class="card muted">No requests waiting. New client requests show up here.</div>') +
       '<div id="bkbody"></div></section>';
     const body = $('#bkbody', root);
     if (view.bkMode === 'calendar') drawCal(body); else drawList(body);
     root.addEventListener('click', onBookingClick);
     $('#addbk', root).addEventListener('click', () => editBooking(null));
+    $('#bkcsv', root).addEventListener('click', () => bookingsCsv());
     $$('[data-mode]', root).forEach((b) => b.addEventListener('click', () => { view.bkMode = b.getAttribute('data-mode'); App.render(); }));
   }
 
@@ -178,7 +188,7 @@
     });
     if (view.bkSearch) { const q = view.bkSearch.toLowerCase(); list = list.filter((b) => (b.company + ' ' + b.clientName + ' ' + b.bikeIds.map(Data.bikeLabel).join(' ') + ' ' + b.id).toLowerCase().includes(q)); }
     list.sort((a, b) => b.start.localeCompare(a.start));
-    const filters = [['all', 'All'], ['pending', 'Pending'], ['upcoming', 'Upcoming'], ['past', 'Past'], ['declined', 'Declined']];
+    const filters = [['all', 'All'], ['pending', 'Pending'], ['upcoming', 'Upcoming'], ['past', 'Past'], ['declined', 'Declined'], ['cancelled', 'Cancelled']];
     body.innerHTML = '<div class="card"><div class="filters"><div class="seg wrap">' + filters.map(([k, l]) => '<button class="' + (f === k ? 'on' : '') + '" data-bkf="' + k + '">' + l + '</button>').join('') + '</div>' +
       '<input class="input search" id="bksearch" type="search" placeholder="Search company, client, bike…" value="' + esc(view.bkSearch) + '"></div>' +
       (list.length ? list.map(bookingRow).join('') : '<p class="muted pad">No bookings match.</p>') + '</div>';
@@ -407,6 +417,18 @@
     draw();
   }
 
+  /* Nov 8 2026 (admin menu): all bookings as a spreadsheet file */
+  function bookingsCsv() {
+    const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const rows = Data.list('bookings').sort((a, b) => (a.start < b.start ? -1 : 1));
+    const lines = [['Booking', 'Company', 'Client', 'Email', 'Phone', 'Start', 'End', 'Bikes', 'Status', 'Total (dollars)', 'Deposit (dollars)', 'Campaign', 'Created'].map(q).join(',')]
+      .concat(rows.map((b) => [b.id, b.company, b.clientName, b.email, b.phone, b.start, b.end, (b.bikeIds || []).length, UI.STATUS_LABEL[statusOf(b)] || b.status, b.total, b.deposit, b.adText, b.createdAt].map(q).join(',')));
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'media-on-wheels-bookings-' + Data.today() + '.csv';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    toast('CSV downloaded (' + rows.length + ' bookings)');
+  }
+
   function exportCsv(rows) {
     const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const lines = [['Date', 'Description', 'Category', 'Amount', 'Running balance', 'Reconciled', 'Booking'].map(q).join(',')]
@@ -452,11 +474,11 @@
       '<tr><td>Weekly charge, per bike per week</td><td class="amt">' + money(s.weeklyPerBike) + '</td></tr>' +
       '<tr><td>Deposit due at booking</td><td class="amt">' + (s.depositPct == null ? 20 : s.depositPct) + '%</td></tr>' +
       '<tr><td>Minimum bikes per booking</td><td class="amt">' + (s.minBikes || 5) + '</td></tr></tbody></table>' +
-      '<p class="small muted">Change these prices in the form above. Discounts below are taken off the subtotal on the client\'s price page. For each type the biggest matching discount counts; different types add up (at most 90% off).</p>' +
+      '<p class="small muted">Change these prices in the boxes above. Discounts below are taken off the subtotal on the client\'s price page. For each type the biggest matching discount counts; different types add up (at most 90% off).</p>' +
       (rules.length ? '<ul class="disc-list">' + rules.map((r) =>
         '<li class="disc-item' + (r.active === false ? ' off' : '') + '"><div><strong>' + esc(r.label || (DKINDS.find((k) => k[0] === r.kind) || [0, r.kind])[1]) + '</strong>' +
-        '<span class="small muted">' + cond(r) + ' · <b>' + (+r.pct) + '% off</b>' + (r.active === false ? ' · off' : '') + '</span></div>' +
-        '<div class="disc-actions"><button class="btn ghost small-btn" data-dedit="' + r.id + '">Edit</button><button class="btn danger-ghost small-btn" data-ddel="' + r.id + '">Delete</button></div></li>').join('') + '</ul>' : '<p class="muted">No discounts yet.</p>') +
+        '<span class="small muted">' + cond(r) + ' · <b>' + (+r.pct) + '% off</b>' + (r.active === false ? ' · off' : '') + (r.expires ? (Data.expired(r) ? ' · <b>expired ' + esc(UI.fmtDate(r.expires)) + '</b>' : ' · ends ' + esc(UI.fmtDate(r.expires))) : '') + '</span></div>' +
+        '<div class="disc-actions"><button class="btn ghost small-btn" data-dedit="' + r.id + '">Edit</button>' + (r.active !== false && !Data.expired(r) ? '<button class="btn ghost small-btn" data-dexp="' + r.id + '">Expire now</button>' : '') + '<button class="btn danger-ghost small-btn" data-ddel="' + r.id + '">Delete</button></div></li>').join('') + '</ul>' : '<p class="muted">No discounts yet.</p>') +
       (ex ? '<p class="small muted">Example: 10 bikes for 4 weeks = ' + money(ex.subtotal) + (ex.discount ? ' − ' + money(ex.discount) + ' discount = ' + money(ex.total) : '') + ', deposit now ' + money(ex.deposit) + '.</p>' : '') +
       '<div class="row-end"><button class="btn" id="dadd">+ Add discount</button></div>';
     const edit = (id) => {
@@ -469,6 +491,7 @@
         '<label data-for="client">…or client email<input class="input" type="email" name="clientEmail" value="' + esc(r.clientEmail || '') + '"></label>' +
         '<label>Percent off<input class="input" type="number" min="1" max="90" step="0.5" name="pct" value="' + (+r.pct || 10) + '" required></label>' +
         '<label>Name shown to the client (optional)<input class="input" name="label" value="' + esc(r.label || '') + '" placeholder="e.g. Big campaign discount"></label>' +
+        '<label>Ends on (optional; empty = no end)<input class="input" type="date" name="expires" value="' + esc(r.expires || '') + '"></label>' +
         '<label class="check"><input type="checkbox" name="active"' + (r.active === false ? '' : ' checked') + '> On</label>' +
         '<p class="err" id="derr" role="alert"></p><div class="row-end"><button class="btn primary">Save discount</button></div></form>');
       const f = m.querySelector('#df');
@@ -478,7 +501,7 @@
         e.preventDefault();
         const kind = f.kind.value, pct = +f.pct.value;
         if (!(pct > 0 && pct <= 90)) { m.querySelector('#derr').textContent = 'Percent off must be between 1 and 90.'; return; }
-        const rec = { id: id || undefined, kind, pct, label: f.label.value.trim(), active: f.active.checked, min: null, code: '', clientId: '', clientEmail: '' };
+        const rec = { id: id || undefined, kind, pct, label: f.label.value.trim(), active: f.active.checked, min: null, code: '', clientId: '', clientEmail: '', expires: f.expires.value || '' };
         if (kind === 'bikes' || kind === 'weeks') rec.min = Math.max(1, Math.round(+f.min.value || 1));
         if (kind === 'promo') { rec.code = f.code.value.trim().toUpperCase(); if (!rec.code) { m.querySelector('#derr').textContent = 'Type the promo code.'; return; }
           if (Data.list('discounts').some((x) => x.kind === 'promo' && x.id !== id && String(x.code).toUpperCase() === rec.code)) { m.querySelector('#derr').textContent = 'That code already exists.'; return; } }
@@ -488,6 +511,7 @@
     };
     $('#dadd', host).addEventListener('click', () => edit(null));
     $$('[data-dedit]', host).forEach((b) => b.addEventListener('click', () => edit(b.getAttribute('data-dedit'))));
+    $$('[data-dexp]', host).forEach((b) => b.addEventListener('click', () => confirmBox('Expire this discount now?', 'It stops working today. Bookings already made keep their price. You can turn it on again with Edit.', 'Expire now', () => { Data.put('discounts', { id: b.getAttribute('data-dexp'), active: false, expires: Data.addDays(Data.today(), -1) }); toast('Discount expired'); discountsAdmin(host); }, true)));
     $$('[data-ddel]', host).forEach((b) => b.addEventListener('click', () => confirmBox('Delete this discount?', 'Bookings already made keep their price.', 'Delete', () => { Data.remove('discounts', b.getAttribute('data-ddel')); toast('Discount deleted'); discountsAdmin(host); }, true)));
   }
 
@@ -537,6 +561,8 @@
       { key: 'inbox', label: 'Inbox', icon: 'inbox', render: (root) => Inbox.renderAdmin(root), badge: () => (window.Inbox ? Inbox.waiting() : 0) },
       { key: 'settings', label: 'Settings', icon: 'gear', render: renderSettings }
     ],
-    teardown
+    teardown,
+    /* Nov 8 2026: the admin menu (js/admin-menu.js) re-uses these panels inside its sections */
+    parts: { renderMap, renderBikes, renderBookings, renderBooks, renderSettings, payAdmin, discountsAdmin, editBooking, editBike, bookingsCsv }
   };
 })();

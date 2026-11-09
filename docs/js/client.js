@@ -8,8 +8,9 @@
   let ride = null;
   /* Nov 8 2026 (client, via David): a booking is at least 5 bikes. Admin can change it in settings.minBikes; the admin's own booking editor has no minimum. */
   const MIN_BIKES = () => Math.max(1, Math.round(+((window.Data && Data.settings && Data.settings().minBikes) || 5)));
-  const MAX_BIKES = 500; /* only a typing guard; what is free on the picked days is checked separately */
-  const clampCount = (n) => Math.max(MIN_BIKES(), Math.min(MAX_BIKES, Math.round(+n) || MIN_BIKES()));
+  const MAX_BIKES = () => Math.max(MIN_BIKES(), Math.round(+((window.SiteSettings && SiteSettings.get('maxBikes')) || 500))); /* Admin → Pricing (default 500, only a typing guard) */
+  const SSET = (k, d) => (window.SiteSettings ? SiteSettings.get(k) : d); /* Nov 8 2026: admin menu settings */
+  const clampCount = (n) => Math.max(MIN_BIKES(), Math.min(MAX_BIKES(), Math.round(+n) || MIN_BIKES()));
   /* Nov 8 2026: discounts (admin price table) + promo code for this booking */
   let me = null;
   const quoteOpts = () => ({ promo: wiz.promo || null, client: me ? { id: me.id, email: me.email } : null });
@@ -57,31 +58,49 @@
   }
 
   /* ---- step 1: business details + area ---- */
+  function formField(id) {
+    const D = { company: ['Business / company name (shown on the ads)', 'e.g. Fresh Basket Grocery', true], email: ['Email address', '', true], phone: ['Phone number', '(845) 555-0123', true], campaign: ['Campaign description', "What's the campaign about? (optional)", false] }[id];
+    return window.SiteSettings ? SiteSettings.field(id) : { show: true, required: D[2], label: D[0], help: D[1] };
+  }
+  function box(id, open, inner) {
+    const F = formField(id); if (!F.show) return '';
+    const attrs = (F.required ? ' required' : '') + (F.help ? ' placeholder="' + esc(F.help) + '"' : '');
+    return '<label>' + esc(F.label) + open + attrs + (inner != null ? '>' + inner + '</textarea>' : '>') + '</label>';
+  }
   function renderDetails(root, user) {
     const b = bizOf(user);
     root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>Book ad bikes</h1></div>' + steps4(1) +
       '<form class="card form" id="det" novalidate><h2>Your business</h2>' +
       /* Nov 8 2026 (client Shimon): step 1 asks ONLY business / company name, email, phone and (3:58 PM) an optional campaign description. The area, streets and old ad-text questions were taken off. */
-      '<label>Business / company name (shown on the ads)<input class="input" name="company" required autocomplete="organization" value="' + esc(b.company) + '" placeholder="e.g. Fresh Basket Grocery"></label>' +
-      '<label>Email address<input class="input" name="email" type="email" required autocomplete="email" value="' + esc(b.email) + '"></label>' +
-      '<label>Phone number<input class="input" name="phone" type="tel" inputmode="tel" required autocomplete="tel" value="' + esc(b.phone) + '" placeholder="(845) 555-0123"></label>' +
-      '<label>Campaign description<textarea class="input" name="campaign" rows="3" maxlength="600" placeholder="What\'s the campaign about? (optional)">' + esc(b.adText || '') + '</textarea></label>' +
+      /* Nov 8 2026 (admin menu → Booking form): each box can be shown/hidden, required or not, with its own label and help text. */
+      box('company', '<input class="input" name="company" autocomplete="organization" value="' + esc(b.company) + '"') +
+      box('email', '<input class="input" name="email" type="email" autocomplete="email" value="' + esc(b.email) + '"') +
+      box('phone', '<input class="input" name="phone" type="tel" inputmode="tel" autocomplete="tel" value="' + esc(b.phone) + '"') +
+      box('campaign', '<textarea class="input" name="campaign" rows="3" maxlength="600"', esc(b.adText || '')) +
       '<p class="err" id="det-err" role="alert"></p>' +
       '<div class="flow-actions"><span class="small muted">Step 1 of 4</span><button class="btn primary big" type="submit">Next: dates & bikes ›</button></div></form>' +
-      /* Nov 8 2026: the client asked to take the "Your ad riding in Williamsburg" preview off this step (rideCard kept in the code) */
+      /* Nov 8 2026: the client asked to take the "Your ad riding in Williamsburg" preview off this step (rideCard kept in the code).
+       * Admin → Switches → "Bike map card on booking step 1" can bring it back (off by default). */
+      (SSET('show.bookingMap', false) === true ? rideCard('Your ad, riding in ' + (window.SiteSettings ? SiteSettings.areasText() : 'Williamsburg')) : '') +
       '</section>';
     const f = $('#det', root);
+    const val = (n) => (f[n] ? f[n].value.trim() : null);
     const save = () => {
-      Object.assign(b, { company: f.company.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim(), adText: f.campaign.value.trim() });
+      const v = { company: val('company'), phone: val('phone'), email: val('email'), adText: val('campaign') };
+      Object.keys(v).forEach((k) => { if (v[k] !== null) b[k] = v[k]; }); /* a hidden box keeps the account's value */
+      if (!b.company) b.company = (user && (user.company || user.name)) || '';
       wiz.area = ''; wiz.areaNote = ''; /* no longer asked */
     };
-    f.company.addEventListener('input', () => { b.company = f.company.value.trim(); updRide(); });
+    if ($('#ride', root)) mountRide(root); /* only when the admin switched the bike card back on */
+    if (f.company) f.company.addEventListener('input', () => { b.company = f.company.value.trim(); updRide(); });
     f.addEventListener('submit', (e) => {
       e.preventDefault(); save();
       const err = $('#det-err', root);
-      if (!b.company) { err.textContent = 'Please type the business name.'; f.company.focus(); return; }
-      if (!b.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email)) { err.textContent = 'Please type a good email address.'; f.email.focus(); return; }
-      if (b.phone.replace(/\D/g, '').length < 7) { err.textContent = 'Please type the phone number.'; f.phone.focus(); return; }
+      const need = (id) => formField(id).show && formField(id).required;
+      if (need('company') && !b.company) { err.textContent = 'Please type the business name.'; f.company.focus(); return; }
+      if ((need('email') || (f.email && f.email.value.trim())) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email || '')) { err.textContent = 'Please type a good email address.'; f.email.focus(); return; }
+      if ((need('phone') || (f.phone && f.phone.value.trim())) && String(b.phone || '').replace(/\D/g, '').length < 7) { err.textContent = 'Please type the phone number.'; f.phone.focus(); return; }
+      if (need('campaign') && !b.adText) { err.textContent = 'Please describe the campaign.'; f.campaign.focus(); return; }
       go('dates');
     });
   }
@@ -92,14 +111,19 @@
     if (wiz.calY === null) { wiz.calY = now.getFullYear(); wiz.calM = now.getMonth(); }
     const picking = wiz.start && !wiz.end;
     const free = freeFor();
-    const fleet = Data.list('bikes').length;
+    const fleet = Data.list('bikes').filter((x) => x.active !== false).length; /* inactive bikes (admin) are not offered */
     if (wiz.specific) wiz.count = wiz.bikeIds.length;
     if (!wiz.specific) wiz.count = clampCount(wiz.count);
     const J = window.JCal && JCal.ready ? JCal : null;
     const heOf = (ds) => (J ? ' <span class="he" lang="he">' + esc(J.day(ds).heFull) + '</span>' : '');
     /* Nov 8 2026 (client): clean calendar — free bikes + small Hebrew date; a holiday is only a tiny dot + one small line (UI.calendarHtml); Shabbos blocked. */
     const isShabbos = (ds) => (J ? !!J.day(ds).shabbos : new Date(ds + 'T12:00:00').getDay() === 6);
-    const banner = !wiz.start ? '<strong>Tap the first day.</strong> Each day shows how many bikes are free. The bikes do not ride on Shabbos.' :
+    const shab = SSET('shabbosNoteOn', true) !== false ? ' ' + esc(SSET('shabbosNote', 'The bikes do not ride on Shabbos.')) : '';
+    const earliest = window.SiteSettings ? SiteSettings.earliest() : Data.today();
+    const blocked = (ds) => !!(window.SiteSettings && SiteSettings.blocked(ds)); /* Admin → Calendar & days: blocked days + lead time */
+    const wk = wiz.start && wiz.end ? Data.weeks(wiz.start, wiz.end) : 0, wMin = Math.max(1, +SSET('weeksMin', 1) || 1), wMax = Math.max(wMin, +SSET('weeksMax', 52) || 52);
+    const weeksBad = wk && (wk < wMin || wk > wMax);
+    const banner = !wiz.start ? '<strong>Tap the first day.</strong> Each day shows how many bikes are free.' + shab :
       picking ? '<strong>Now tap the last day.</strong> Starting ' + esc(fmtDate(wiz.start)) + '.<div class="quick"><button type="button" class="chip" data-q="6">1 week</button><button type="button" class="chip" data-q="13">2 weeks</button><button type="button" class="chip" data-q="27">4 weeks</button></div>' :
       '<strong>Dates picked.</strong> Tap a day to start over.';
     let sel = '';
@@ -108,23 +132,25 @@
       sel = '<div class="sel-sum"><strong>' + esc(fmtRange(wiz.start, wiz.end)) + '</strong><span>' + days + ' day' + (days > 1 ? 's' : '') + ' · billed as ' + weeks + ' week' + (weeks > 1 ? 's' : '') + '</span>' +
         (J ? '<span class="he" lang="he">' + esc(J.day(wiz.start).heFull) + ' – ' + esc(J.day(wiz.end).heFull) + '</span>' : '') + '</div>';
     }
-    const all = Data.list('bikes').sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
+    const all = Data.list('bikes').filter((x) => x.active !== false).sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
     const freeIds = new Set(free.map((x) => x.id));
     const chosen = new Set(wiz.bikeIds);
     root.innerHTML = '<section class="page"><div class="page-head"><button class="back" id="back">‹ Details</button><h1>Dates & bikes</h1></div>' + steps4(2) +
       '<div class="pick-banner ' + (picking ? 'end' : '') + '">' + banner + '</div>' +
       '<div class="card cal-card">' + calendarHtml(wiz.calY, wiz.calM, {
-        isDisabled: (ds) => ds < Data.today() || (picking && ds < wiz.start) || isShabbos(ds),
-        rangeStart: wiz.start, rangeEnd: wiz.end || wiz.start, holidays: false, labels: false,
+        isDisabled: (ds) => ds < earliest || (picking && ds < wiz.start) || isShabbos(ds) || blocked(ds),
+        rangeStart: wiz.start, rangeEnd: wiz.end || wiz.start, holidays: false, labels: false, dots: SSET('holidayDots', true) !== false,
         cell: (ds) => {
-          if (ds < Data.today() || isShabbos(ds)) return '';
+          if (ds < earliest || isShabbos(ds)) return '';
+          if (blocked(ds)) return '<span class="free none">closed</span>';
           const n = Data.freeBikes(ds, ds).length;
           return '<span class="free ' + (n === 0 ? 'none' : n < 5 ? 'low' : '') + '">' + (n === 0 ? 'full' : '<b>' + n + '</b><i> free</i>') + '</span>';
         }
       }) + '</div>' +
       '<section class="card"><h2>How many bikes?</h2>' + sel +
       '<div class="bike-row" style="margin-top:.7rem"><div><strong>' + (wiz.specific ? 'Bikes you picked' : 'Number of bikes') + '</strong><div class="small muted">' + (wiz.start && wiz.end ? free.length + ' of ' + fleet + ' bikes free for these dates' : fleet + ' bikes in the fleet · pick dates to see what is free') + '</div></div>' +
-      '<div class="stepper" role="group" aria-label="Number of bikes"><button type="button" id="minus" aria-label="One bike less"' + (wiz.count <= MIN_BIKES() || wiz.specific ? ' disabled' : '') + '>−</button><input id="cnt" type="number" inputmode="numeric" min="' + MIN_BIKES() + '" max="' + MAX_BIKES + '" step="1" value="' + wiz.count + '" aria-label="Number of bikes"' + (wiz.specific ? ' disabled' : '') + '><button type="button" id="plus" aria-label="One bike more"' + (wiz.count >= MAX_BIKES || wiz.specific ? ' disabled' : '') + '>+</button></div></div>' + /* Nov 8 2026 (David): no "Minimum 5 bikes" line; the minus button simply stops at 5 */
+      '<div class="stepper" role="group" aria-label="Number of bikes"><button type="button" id="minus" aria-label="One bike less"' + (wiz.count <= MIN_BIKES() || wiz.specific ? ' disabled' : '') + '>−</button><input id="cnt" type="number" inputmode="numeric" min="' + MIN_BIKES() + '" max="' + MAX_BIKES() + '" step="1" value="' + wiz.count + '" aria-label="Number of bikes"' + (wiz.specific ? ' disabled' : '') + '><button type="button" id="plus" aria-label="One bike more"' + (wiz.count >= MAX_BIKES() || wiz.specific ? ' disabled' : '') + '>+</button></div></div>' + /* Nov 8 2026 (David): no "Minimum 5 bikes" line; the minus button simply stops at 5 */
+      (weeksBad ? '<p class="err" id="weeks-bad">A booking is ' + (wMin === wMax ? wMin : 'from ' + wMin + ' to ' + wMax) + ' week' + (wMax > 1 ? 's' : '') + ' long. Please pick other dates.</p>' : '') +
       (wiz.specific && wiz.bikeIds.length < MIN_BIKES() ? '<p class="err">Please pick at least ' + MIN_BIKES() + ' bikes (you picked ' + wiz.bikeIds.length + ').</p>' : '') +
       (wiz.start && wiz.end && free.length && free.length < MIN_BIKES() ? '<p class="err">Only ' + free.length + ' bikes are free on these days, and a booking is at least ' + MIN_BIKES() + ' bikes. Please try other dates.</p>' : '') +
       (wiz.start && wiz.end && !wiz.specific && free.length >= MIN_BIKES() && wiz.count > free.length ? '<p class="err" id="too-many">Only ' + free.length + ' bikes are free on these days. Please pick ' + free.length + ' or fewer, or other dates.</p>' : '') +
@@ -133,7 +159,7 @@
         const ok = freeIds.has(x.id), loc = Data.get('locations', x.locationId);
         return '<button type="button" class="bike-tile' + (chosen.has(x.id) ? ' on' : '') + (ok ? '' : ' busy') + '" data-bike="' + x.id + '"' + (ok ? '' : ' disabled') + ' aria-pressed="' + chosen.has(x.id) + '"><span class="num">' + esc(x.number) + '</span><span class="small">' + esc(loc ? loc.name : '') + '</span><span class="small">' + (ok ? 'Free' : 'Booked') + '</span></button>';
       }).join('') + '</div>' + (wiz.specific ? '<button type="button" class="btn ghost small-btn" id="clearpick" style="margin-top:.5rem">Clear, just give me any free bikes</button>' : '') + '</details>' +
-      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="confirm"' + (wiz.start && wiz.end && wiz.count >= MIN_BIKES() && free.length >= MIN_BIKES() && wiz.count <= free.length ? '' : ' disabled') + '>Confirm booking ›</button></div>' +
+      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="confirm"' + (wiz.start && wiz.end && !weeksBad && wiz.count >= MIN_BIKES() && free.length >= MIN_BIKES() && wiz.count <= free.length ? '' : ' disabled') + '>Confirm booking ›</button></div>' +
       (wiz.start && wiz.end && !free.length ? (Data.list('bikes').length ? '<p class="err">No bikes are free for all of these days. Try other dates.</p>' : '<p class="err">Our bikes are being set up in the system right now, so they cannot be booked online yet. Please check back soon.</p>') : '') + '</section>' +
       /* Nov 8 2026 (David: "Take down this map"): the "More bikes, more streets" bike animation is off this step (rideCard kept in the code) */
       '</section>';
@@ -370,9 +396,8 @@
   function renderDone(root) {
     const b = Data.get('bookings', wiz.lastId);
     const J = window.JCal && JCal.ready ? JCal : null;
-    root.innerHTML = '<section class="page narrow center"><div class="done-mark" aria-hidden="true">✓</div><h1>Booking confirmed</h1>' +
-      '<p class="lead">' + (b && b.payment && b.payment.method === 'zelle' ? 'Thank you! Your booking is sent. It shows as “Awaiting Zelle confirmation” until we see your Zelle payment.' : 'Thank you! Your deposit went through (demo) and your booking is sent to ' + esc(Data.settings().businessName || 'Media on Wheels') + '.') + '</p>' +
-      (b ? '<div class="card confirm-card"><dl class="kv wide"><dt>Booking #</dt><dd>' + 'BK-' + esc(String(b.id).slice(-6).toUpperCase()) + '</dd>' +
+    root.innerHTML = '<section class="page narrow center"><div class="done-mark" aria-hidden="true">✓</div><h1>' + esc(SSET('msgDoneTitle', 'Booking confirmed')) + '</h1>' +
+      '<p class="lead">' + esc(window.SiteSettings ? SiteSettings.text(b && b.payment && b.payment.method === 'zelle' ? 'msgDoneZelle' : 'msgDone') : 'Thank you! Your booking is sent.') + '</p>' +      (b ? '<div class="card confirm-card"><dl class="kv wide"><dt>Booking #</dt><dd>' + 'BK-' + esc(String(b.id).slice(-6).toUpperCase()) + '</dd>' +
         '<dt>Business</dt><dd>' + esc(b.company) + '</dd>' + (b.areaName || b.areaNote ? '<dt>Area</dt><dd>' + esc(b.areaName || '') + (b.areaNote ? ' · ' + esc(b.areaNote) : '') + '</dd>' : '') +
         (b.adText ? '<dt>Campaign</dt><dd class="campaign-text">' + esc(b.adText) + '</dd>' : '') +
         '<dt>Dates</dt><dd>' + esc(fmtRange(b.start, b.end)) + (J ? '<br><span class="he" lang="he">' + esc(J.day(b.start).heFull) + ' – ' + esc(J.day(b.end).heFull) + '</span>' : '') + '</dd>' +
@@ -381,7 +406,7 @@
         (b.discount ? '<dt>Discount</dt><dd>−' + money(b.discount) + '</dd>' : '') + '<dt>Total</dt><dd>' + money(b.total) + '</dd>' +
         '<dt class="hl">' + (b.depositPaid ? 'Deposit paid' : 'Deposit to pay') + (b.depositPct != null ? ' (' + b.depositPct + '%)' : '') + '</dt><dd class="hl">' + money(b.deposit != null ? b.deposit : b.total) + '</dd>' +
         (b.balance != null ? '<dt>Balance later</dt><dd>' + money(b.balance) + (b.balancePaid ? ' · paid' : '') + '</dd>' : '') + '<dt>Payment</dt><dd>' + payDesc(b) + '</dd>' +
-        '<dt>Status</dt><dd><span class="badge st-pending">Pending</span> until ' + esc(Data.settings().businessName || 'Media on Wheels') + ' approves it</dd></dl></div>' : '') +
+        '<dt>Status</dt><dd><span class="badge st-pending">Pending</span> ' + esc(window.SiteSettings ? SiteSettings.text('msgPending') : 'until ' + (Data.settings().businessName || 'Media on Wheels') + ' approves it') + '</dd></dl></div>' : '') +
       '<div class="row-center"><a class="btn primary" href="#/client/bookings" id="tomy">My bookings</a><button class="btn ghost" id="again">Book more</button></div>' +
       /* Nov 8 2026 (David): ask for feedback on the site and on our service after a booking */
       '<div class="card fb-ask"><h2>How did we do?</h2><p class="muted small">Tell us about the website and our service. It takes a few seconds.</p><button type="button" class="btn ghost pill" id="fbafter" data-feedback="booking" data-booking="' + esc(b ? b.id : '') + '">Leave feedback</button></div></section>';

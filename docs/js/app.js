@@ -27,12 +27,13 @@
   const VIEWAS = 'bikeads.viewas';
   const views = (role) => (!DELIVERY && DELIVER_ROLES.includes(role)) ? undefined : ({ admin: window.AdminViews, client: window.ClientViews, driver: window.DriverViews, store: window.StoreViews, boss: window.BossViews })[role];
   const home = (role) => '#/' + role + '/' + views(role).tabs[0].key;
-  const icon = (k) => '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS[k] + '</svg>';
+  const icon = (k) => '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[k] || (window.AdminMenu && AdminMenu.ICON && AdminMenu.ICON[k]) || ICONS.gear) + '</svg>';
 
   let current = null;
   const PAGE_TITLE = document.title; /* the search-engine title from index.html, kept on the open pages */
 
   const App = {
+    icon,
     user() { return current; },
     async start() {
       /* Nov 8 2026: sign-in goes through Auth (js/auth.js): the shared Supabase database when its keys are set in
@@ -41,7 +42,8 @@
       try { dbUser = await Auth.init(() => { current = null; App.render(); }); }
       catch (e) { console.error(e); toast(Auth.friendly(e)); }
       try { await Data.init(Auth.adapter()); }
-      catch (e) { console.error(e); toast('Could not reach the database: ' + Auth.friendly(e)); await Data.init(window.DataLocalAdapter); }
+      catch (e) { console.error(e); toast('Could not reach the database right now. The site still works; please try again in a few minutes.'); await Data.init(window.DataLocalAdapter); }
+      if (window.SiteSettings) SiteSettings.apply(); /* Nov 8 2026: admin menu settings (colors, fonts, switches, banner, SEO) */
       if (Auth.remote) current = dbUser ? (Data.get('users', dbUser.id) || dbUser) : null;
       else { const sid = localStorage.getItem(SESSION); current = sid ? Data.get('users', sid) : null; }
       if (current && !views(current.role)) current = null;
@@ -82,7 +84,8 @@
       if (window.HomeVideo) HomeVideo.teardown();
       const parts = (location.hash.replace(/^#\/?/, '') || '').split('/').filter(Boolean);
       const app = $('#app');
-      document.title = current ? (Data.settings().businessName || 'Media on Wheels') + ' · ' + (ROLE_LABEL[current.role] || 'Account') : PAGE_TITLE;
+      document.title = current ? (Data.settings().businessName || 'Media on Wheels') + ' · ' + (ROLE_LABEL[current.role] || 'Account') : ((window.SiteSettings && SiteSettings.pageTitle) || PAGE_TITLE);
+      if (current && current.disabled) { toast('This account is turned off. Please contact us.'); App.logout(); return; } /* Nov 8 2026: admin can turn an account off */
       if (current && !views(current.role)) current = null;
       if (parts[0] === 'home') return HomePage.render(app, current); // the open main page, also for logged-in users
       if (parts[0] === 'newpassword' && Auth.remote) return renderNewPassword(app);
@@ -106,6 +109,7 @@
       if (parts[0] !== role) { location.replace(home(role)); return; }
       const tab = V.tabs.find((t) => t.key === parts[1]) || V.tabs[0];
       app.innerHTML = shell(role, V.tabs, tab.key);
+      if (role === 'admin' && window.AdminMenu) AdminMenu.wire(role, V.tabs, tab.key); /* Nov 8 2026: admin menu (side menu / phone Menu drawer) */
       $('#logout').addEventListener('click', () => App.logout());
       netBanner();
       const main = $('#main');
@@ -127,18 +131,17 @@
     const viewing = sessionStorage.getItem(VIEWAS);
     const dl = DELIVER_ROLES.includes(role);
     const sub = role === 'store' ? (window.Deliver && Deliver.storeOf(current) ? Deliver.storeOf(current).name : current.company) : role === 'client' ? current.company : '';
-    return (viewing ? '<div class="viewas">Viewing as ' + esc(current.name) + ' (' + ROLE_LABEL[role] + ')<button class="mini" id="viewas-back">Back to Admin</button></div>' : '') +
+    const adminMenu = role === 'admin' && window.AdminMenu; /* Nov 8 2026: the admin gets the side menu + phone Menu drawer */
+    return (adminMenu ? (h) => AdminMenu.shell(role, tabs, active, current, h) : (h) => h + '<main id="main" tabindex="-1"></main>' + '<nav class="tabs mob" aria-label="Main">' + nav + '</nav>')((viewing ? '<div class="viewas">Viewing as ' + esc(current.name) + ' (' + ROLE_LABEL[role] + ')<button class="mini" id="viewas-back">Back to Admin</button></div>' : '') +
       '<div class="netbar" id="netbar" role="status" hidden>No signal — everything you do is saved on this phone.</div>' +
       '<header class="top' + (dl ? ' deliver' : '') + '"><a class="brand" href="#/' + role + '/' + tabs[0].key + '"><span class="logo" aria-hidden="true"><i class="lf r"></i><i class="lf b"></i></span>' + esc(s.businessName || 'Media on Wheels') + (dl ? '<span class="brand-sub">Deliver</span>' : '') + '</a>' +
       (role === 'client' ? '' : '<span class="role-pill ' + role + '">' + ROLE_LABEL[role] + '</span>') + /* Nov 8 2026 (David): no "Client" badge; Admin keeps its badge */
-      '<nav class="tabs desk" aria-label="Main">' + nav + '</nav>' +
-      '<div class="who">' + (role === 'client' ? '<a class="btn ghost small-btn" href="#/home" id="gohome">Home</a>' : '') + /* Nov 8 2026: signed-in clients can open the main page */ '<span class="who-name">' + esc(current.name) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span><button class="btn ghost small-btn" id="logout">' + (viewing ? 'Back' : 'Log out') + '</button></div></header>' +
-      '<main id="main" tabindex="-1"></main>' +
-      '<nav class="tabs mob" aria-label="Main">' + nav + '</nav>';
+      (adminMenu ? '' : '<nav class="tabs desk" aria-label="Main">' + nav + '</nav>') +
+      '<div class="who">' + (role === 'client' ? '<a class="btn ghost small-btn" href="#/home" id="gohome">Home</a>' : '') + /* Nov 8 2026: signed-in clients can open the main page */ '<span class="who-name">' + esc(current.name) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span><button class="btn ghost small-btn" id="logout">' + (viewing ? 'Back' : 'Log out') + '</button></div></header>');
   }
 
   function brandBlock() {
-    return '<div class="auth-brand"><span class="logo big" aria-hidden="true"><i class="lf r"></i><i class="lf b"></i></span><h1>' + esc(Data.settings().businessName || 'Media on Wheels') + '</h1><p>Ads on grocery-delivery bikes in Williamsburg and Boro Park' + (DELIVERY ? ' — and deliveries for local stores.' : '.') + '</p></div>';
+    return '<div class="auth-brand"><span class="logo big" aria-hidden="true"><i class="lf r"></i><i class="lf b"></i></span><h1>' + esc(Data.settings().businessName || 'Media on Wheels') + '</h1><p>' + (window.SiteSettings ? esc(SiteSettings.text('tagline')) : 'Ads on grocery-delivery bikes in Williamsburg and Boro Park.') + (DELIVERY ? ' — and deliveries for local stores.' : '') + '</p></div>';
   }
 
   function netBanner() {

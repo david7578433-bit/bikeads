@@ -149,7 +149,7 @@
     },
     freeBikes(start, end, exceptBookingId) {
       const busy = Data.busyBikeIds(start, end, exceptBookingId);
-      return state.bikes.filter((b) => !busy.has(b.id));
+      return state.bikes.filter((b) => b.active !== false && !busy.has(b.id)); /* Nov 8 2026: an inactive bike (admin) is not offered */
     },
     days(start, end) { return Math.round((new Date(end + 'T12:00:00') - new Date(start + 'T12:00:00')) / 86400000) + 1; },
     quote(nBikes, start, end) {
@@ -173,14 +173,14 @@
       const setupEach = +s.setupFeePerBike || 0, weeklyEach = +s.weeklyPerBike || 0;
       const r2 = (x) => Math.round(x * 100) / 100;
       const setup = r2(n * setupEach), weekly = r2(n * weeklyEach * weeks), subtotal = r2(setup + weekly);
-      const rules = (state.discounts || []).filter((r) => r && r.active !== false && +r.pct > 0);
+      const rules = (state.discounts || []).filter((r) => r && r.active !== false && +r.pct > 0 && !Data.expired(r));
       const best = (list) => list.sort((a, b) => (+b.pct) - (+a.pct))[0] || null;
       const cl = opts.client || {};
       const picks = [
         best(rules.filter((r) => r.kind === 'bikes' && n >= (+r.min || 0))),
         best(rules.filter((r) => r.kind === 'weeks' && weeks >= (+r.min || 0))),
         best(rules.filter((r) => r.kind === 'client' && ((cl.id && r.clientId === cl.id) || (cl.email && r.clientEmail && r.clientEmail.toLowerCase() === String(cl.email).toLowerCase())))),
-        opts.promo && opts.promo.active !== false && +opts.promo.pct > 0 ? opts.promo : null
+        opts.promo && opts.promo.active !== false && +opts.promo.pct > 0 && !Data.expired(opts.promo) ? opts.promo : null
       ].filter(Boolean);
       let pctSum = 0;
       const discounts = picks.map((r) => {
@@ -195,10 +195,12 @@
       return { bikes: n, days, weeks, setupEach, weeklyEach, setup, weeklyPerWeek: r2(n * weeklyEach), weekly, subtotal, discounts, discount, total,
         depositPct, deposit, balance: r2(total - deposit), samples: !!s.pricesAreSamples };
     },
+    /* Nov 8 2026 (admin menu): a discount / promo code with an end date stops working after that day. */
+    expired(r) { return !!(r && r.expires && String(r.expires) < Data.today()); },
     /* This-device mode: find an active promo code rule (in database mode the database checks codes: Auth.checkPromo). */
     findPromo(code) {
       const c = String(code || '').trim().toLowerCase(); if (!c) return null;
-      return (state.discounts || []).find((r) => r.kind === 'promo' && r.active !== false && String(r.code || '').trim().toLowerCase() === c) || null;
+      return (state.discounts || []).find((r) => r.kind === 'promo' && r.active !== false && !Data.expired(r) && String(r.code || '').trim().toLowerCase() === c) || null;
     },
     SAMPLE_PRICES,
     bike(id) { return Data.get('bikes', id); },

@@ -46,7 +46,7 @@ test('calendar is a normal calendar: no holiday list or legend, a tiny dot on ho
 
 test('"Leave feedback": website stars + comment AND our service stars + comment, optional name/email, saved, admin reads it', async () => {
   const f = read('js/feedback.js'), html = read('index.html'), sw = read('sw.js');
-  assert.match(html, /js\/feedback\.js\?v=14/); assert.match(sw, /"js\/feedback\.js"/);
+  assert.match(html, /js\/feedback\.js\?v=1[5-9]/); assert.match(sw, /"js\/feedback\.js"/);
   for (const s of ['Leave feedback', 'The website', 'Our service', 'How good are we?', "starsInput('site'", "starsInput('service'", 'name="siteComment"', 'name="serviceComment"', 'Your name (optional)', 'Email (optional)']) assert.ok(f.includes(s), s);
   assert.match(f, /for \(let i = 5; i >= 1; i--\)/, 'stars 1 to 5');
   // this-device mode: saved in the feedback collection
@@ -114,8 +114,12 @@ test('header: no "Client" badge (Admin keeps it); booking map card off; Home lin
   const app = read('js/app.js'), c = read('js/client.js');
   assert.match(app, /role === 'client' \? '' : '<span class="role-pill/); assert.match(app, /href="#\/home" id="gohome">Home</);
   const dates = c.slice(c.indexOf('function renderDates'), c.indexOf('function priceTable'));
+  /* the card is off; since the Nov 8 admin menu it comes back only through Admin → Switches (default off) */
   assert.ok(!dates.includes("rideCard(") && !dates.includes('mountRide(root)'), 'no "More bikes, more streets" map card');
-  assert.ok(!c.slice(c.indexOf('function renderDetails'), c.indexOf('function renderDates')).includes('rideCard('));
+  const det = c.slice(c.indexOf('function renderDetails'), c.indexOf('function renderDates'));
+  assert.ok(!/[^?] rideCard\(/.test(det), 'step 1: no card');
+  assert.match(det, /SSET\('show\.bookingMap', false\) === true \? rideCard\(/, 'only behind the admin switch');
+  assert.match(read('js/settings.js'), /f\('show\.bookingMap',[^\n]{0,140}?'toggle', false,/, 'switch is off by default');
 });
 
 test('tracker is optional: a bike saves with no tracker ID and shows "No tracker yet"', () => {

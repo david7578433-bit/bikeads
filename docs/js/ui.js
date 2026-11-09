@@ -238,7 +238,7 @@
       const inRange = o.rangeStart && ds >= o.rangeStart && ds <= (o.rangeEnd || o.rangeStart);
       const jd = J ? J.day(ds) : null;
       const ev = jd && jd.events[0];
-      const hev = holOf(jd); /* Nov 8 2026 (David): a normal calendar, a holiday is only a tiny dot on its day */
+      const hev = o.dots === false ? null : holOf(jd); /* Nov 8 2026 (David): a normal calendar, a holiday is only a tiny dot on its day (Admin → Calendar can hide it) */
       const cls = ['cal-cell', ds === t ? 'today' : '', dis ? 'disabled' : '', inRange ? 'in-range' : '', ds === o.rangeStart ? 'range-start' : '', ds === o.rangeEnd ? 'range-end' : '', ds < t ? 'past' : '',
         jd && jd.shabbos ? 'shab' : '', hev ? 'hol-day' : ''].join(' ');
       let title = '';
@@ -250,7 +250,7 @@
     html += '</div>';
     /* Nov 8 2026 (David: "a normal calendar … a small 'Today is a holiday', no big rush"): no holiday legend or list any more.
      * One small line only: the picked day (o.rangeStart) or else today, when it is a holiday. */
-    if (J) {
+    if (J && o.dots !== false) {
       const inMonth = (ds) => ds && ds.slice(0, 7) === year + '-' + String(month + 1).padStart(2, '0');
       const pickEv = o.rangeStart ? holOf(J.day(o.rangeStart)) : null;
       const todayEv = inMonth(t) ? holOf(J.day(t)) : null;

@@ -54,8 +54,8 @@
 
   function hero(c, user) {
     return '<section class="home-hero" id="top" aria-labelledby="hero-h"><div class="hero-video">' +
-      '<video id="hero-video" muted loop playsinline aria-hidden="true" tabindex="-1" poster="' + HomeVideo.DEFAULT.poster + '"></video><div class="hero-fade" aria-hidden="true"></div>' +
-      '<div class="hero-copy"><span class="hero-kicker">Williamsburg &amp; Boro Park</span>' +
+      '<video id="hero-video" muted loop playsinline aria-hidden="true" tabindex="-1" poster="' + esc(posterUrl()) + '"></video><div class="hero-fade" aria-hidden="true"></div>' +
+      '<div class="hero-copy"><span class="hero-kicker">' + esc((window.SiteSettings && (SiteSettings.get('heroKicker') || SiteSettings.areasText())) || 'Williamsburg & Boro Park') + '</span>' +
       '<h1 id="hero-h">' + esc(c.headline) + '</h1><p>' + esc(c.subline) + '</p>' +
       '<div class="hero-cta">' + bookOrJoin(user, 'btn primary big pill') + '<a class="btn big pill white" href="#prices" data-jump="prices">See prices</a></div></div>' +
       '<span class="video-credit" id="video-credit" hidden></span></div></section>';
@@ -77,7 +77,13 @@
       '<div class="grid3">' + items.map(([i, h, p]) => '<div class="tile"><span class="tile-ico" aria-hidden="true">' + i + '</span><h3>' + h + '</h3><p>' + p + '</p></div>').join('') + '</div></section>';
   }
 
+  const posterUrl = () => { const p = window.SiteSettings && String(SiteSettings.get('heroPoster') || '').trim(); return p && okHttps(p) ? p : HomeVideo.DEFAULT.poster; };
   function how() {
+    if (window.SiteSettings) { /* Nov 8 2026: Admin → Site content → "How it works" steps */
+      const st = SiteSettings.get('howSteps').filter((x) => x && (x.title || x.text));
+      return '<section class="sec" id="how" aria-labelledby="how-h">' + head('how', 'How it works', st.length === 3 ? 'Three steps, all online.' : 'All online.') +
+        '<div class="grid3">' + st.map((x, i) => '<div class="tile"><span class="how-n">' + (i + 1) + '</span><h3>' + esc(x.title) + '</h3><p>' + esc(x.text) + '</p></div>').join('') + '</div></section>';
+    }
     const steps = [['1', 'Pick area &amp; dates', 'Choose where the bikes ride and the days, on a calendar with English and Hebrew dates.'],
       ['2', 'See your price', 'Printing &amp; setup and the weekly charge, added up before you pay.'],
       ['3', 'Your ad rides', 'We print your sign and the bikes carry it up and down the streets.']];
@@ -133,10 +139,20 @@
       esc(c.story).split(/\n\s*\n/).map((p) => '<p>' + p + '</p>').join('') + '</div></section>';
   }
 
+  /* Nov 8 2026: questions & answers (Admin → Site content → FAQ; Admin → Switches can hide it) */
+  function faq() {
+    const items = window.SiteSettings ? SiteSettings.get('faq').filter((x) => x && x.q && x.a) : [];
+    if (!items.length) return '';
+    return '<section class="sec" id="faq" aria-labelledby="faq-h">' + head('faq', 'Questions & answers', '') +
+      '<div class="faq-list">' + items.map((x) => '<details class="tile faq-item"><summary>' + esc(x.q) + '</summary><p>' + esc(x.a) + '</p></details>').join('') + '</div></section>';
+  }
+
   function contact(c, user) {
     const lines = [];
     if (c.contactPhone) lines.push('<a class="btn big pill white" href="tel:' + esc(c.contactPhone.replace(/[^\d+]/g, '')) + '">Call ' + esc(c.contactPhone) + '</a>');
     if (c.contactEmail) lines.push('<a class="btn big pill white" href="mailto:' + esc(c.contactEmail) + '">' + esc(c.contactEmail) + '</a>');
+    const addr = window.SiteSettings ? String(SiteSettings.get('contactAddress') || '').trim() : '';
+    if (addr) lines.push('<span class="contact-addr">' + esc(addr) + '</span>');
     return '<section class="sec book-sec" id="contact" aria-labelledby="contact-h"><div class="book-panel">' +
       '<h2 id="contact-h">Ready to put your ad on the street?</h2><p>Pick your dates and bikes, see the price, and book online.</p>' +
       '<div class="hero-cta center">' + (!user || user.role === 'admin' ? (user ? bookOrJoin(user, 'btn primary big pill') : '') + '<a class="btn big pill ' + (user ? 'white' : 'primary') + '" href="#/signup">Create an account</a>' : bookOrJoin(user, 'btn primary big pill')) + '</div>' +
@@ -146,7 +162,8 @@
   }
 
   function foot() {
-    return '<footer class="lfoot"><span>' + logo + esc(brand()) + '</span><span class="muted small">Main video: <a href="' + HomeVideo.DEFAULT.creditUrl + '" target="_blank" rel="noopener">' + esc(HomeVideo.DEFAULT.credit) + '</a></span><span class="lfoot-links"><button type="button" class="linkish" data-feedback="home">Leave feedback</button><button type="button" class="linkish" data-callreq="home-footer">Request a call</button><a href="#/login">Log in</a></span></footer>';
+    const ft = window.SiteSettings ? String(SiteSettings.get('footerText') || '').trim() : '';
+    return '<footer class="lfoot"><span>' + logo + esc(brand()) + '</span>' + (ft ? '<span class="lfoot-text">' + esc(ft) + '</span>' : '') + '<span class="muted small">Main video: <a href="' + HomeVideo.DEFAULT.creditUrl + '" target="_blank" rel="noopener">' + esc(HomeVideo.DEFAULT.credit) + '</a></span><span class="lfoot-links"><button type="button" class="linkish" data-feedback="home">Leave feedback</button><button type="button" class="linkish" data-callreq="home-footer">Request a call</button><a href="#/login">Log in</a></span></footer>';
   }
 
   function dock(user) {
@@ -158,8 +175,8 @@
     DEFAULTS, content,
     render(app, user) {
       const c = content();
-      document.title = brand() + ' · Ads on grocery-delivery bikes in Williamsburg & Boro Park';
-      app.innerHTML = '<main class="auth home v4 mow">' + nav(user) + '<div class="lpanel">' + hero(c, user) + what() + how() + prices(user) + /* Nov 8 2026 (David: "take this down"): no Videos section */ reach(c) + feedback(c) + why() + story(c) + contact(c, user) + '</div>' + foot() + dock(user) + '</main>';
+      document.title = (window.SiteSettings && SiteSettings.pageTitle) || (brand() + ' · Ads on grocery-delivery bikes in Williamsburg & Boro Park'); /* Admin → Google & sharing */
+      app.innerHTML = '<main class="auth home v4 mow">' + nav(user) + '<div class="lpanel">' + hero(c, user) + what() + how() + prices(user) + /* Nov 8 2026 (David: "take this down"): no Videos section */ reach(c) + feedback(c) + why() + story(c) + faq() + contact(c, user) + '</div>' + foot() + dock(user) + '</main>';
       if (window.HomeVideo) HomeVideo.mount($('#hero-video'), $('#video-credit'));
       $$('[data-jump]', app).forEach((l) => l.addEventListener('click', (e) => {
         const t = document.getElementById(l.getAttribute('data-jump')); if (!t) return;

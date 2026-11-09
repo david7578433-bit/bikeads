@@ -20,7 +20,7 @@
   /* ---------- small helpers ---------- */
   const siteUrl = () => location.origin + location.pathname;
   const clean = (o) => JSON.parse(JSON.stringify(o == null ? null : o));
-  const toUser = (p) => p && ({ id: p.id, role: p.role || 'client', name: p.name || (p.email || '').split('@')[0], company: p.company || '', phone: p.phone || '', email: p.email || '', createdAt: p.created_at });
+  const toUser = (p) => p && ({ id: p.id, role: p.role || 'client', name: p.name || (p.email || '').split('@')[0], company: p.company || '', phone: p.phone || '', email: p.email || '', createdAt: p.created_at, ...(p.disabled != null ? { disabled: !!p.disabled } : {}) });
   async function sha256(text) {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -103,8 +103,8 @@
   };
 
   /* Discounts (admin price table) live in their own table, mow_discounts (promo codes are not readable by clients). */
-  const fromDiscount = (d) => ({ id: d.id, kind: d.kind, min: d.min_count, code: d.code || '', clientId: d.client_id || '', clientEmail: d.client_email || '', pct: +d.pct, label: d.label || '', active: d.active !== false });
-  const toDiscount = (r) => ({ id: r.id, kind: r.kind, min_count: r.min == null ? null : Math.round(+r.min), code: r.code || null, client_id: uuidLike(r.clientId) ? r.clientId : null, client_email: (r.clientEmail || '').toLowerCase() || null, pct: +r.pct, label: r.label || '', active: r.active !== false });
+  const fromDiscount = (d) => ({ id: d.id, kind: d.kind, min: d.min_count, code: d.code || '', clientId: d.client_id || '', clientEmail: d.client_email || '', pct: +d.pct, label: d.label || '', active: d.active !== false, expires: d.expires_on || '' });
+  const toDiscount = (r) => ({ id: r.id, kind: r.kind, min_count: r.min == null ? null : Math.round(+r.min), code: r.code || null, client_id: uuidLike(r.clientId) ? r.clientId : null, client_email: (r.clientEmail || '').toLowerCase() || null, pct: +r.pct, label: r.label || '', active: r.active !== false, ...(r.expires ? { expires_on: r.expires } : {}) }); /* expires_on: Nov 8 2026 admin-menu migration in schema.sql */
   async function saveDiscounts(list) {
     const before = snap.discounts || (snap.discounts = new Map()), seen = new Set(), rows = [];
     (list || []).forEach((r) => { if (!r || !r.id) return; seen.add(r.id); const k = key(fromDiscount(toDiscount(r))); if (before.get(r.id) !== k) rows.push([toDiscount(r), k]); });
@@ -168,7 +168,7 @@
       const k = key(u); if (snap.users.get(u.id) === k) continue;
       if (!admin && u.id !== profile.id) continue;
       const patch = { name: u.name || '', company: u.company || '', phone: u.phone || '' };
-      if (admin) patch.role = u.role;
+      if (admin) { patch.role = u.role; if (u.disabled != null) patch.disabled = !!u.disabled; } /* disabled: Nov 8 2026 admin-menu migration */
       const res = await sb.from('mow_profiles').update(patch).eq('id', u.id);
       if (res.error) throw res.error; snap.users.set(u.id, k);
     }
@@ -182,6 +182,7 @@
       if (!u) throw new Error('Email or password is wrong.');
       const ok = u.passwordHash ? (await sha256(u.salt + '|' + password)) === u.passwordHash : (u.password != null && u.password === password);
       if (!ok) throw new Error('Email or password is wrong.');
+      if (u.disabled) throw new Error('This account is turned off. Please contact us.');
       return u;
     },
     async signUp({ email, password, name, company, phone }) {

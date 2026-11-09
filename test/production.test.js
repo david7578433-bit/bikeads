@@ -31,9 +31,9 @@ test('a fresh device starts empty: no members, bookings, money records, stores o
   assert.strictEqual(Data.mode(), 'device');
 });
 
-test('config has clearly named, EMPTY Supabase placeholders and no secret key', () => {
+test('config has the real Supabase project URL + PUBLIC (publishable) key only, no secret key (Nov 8 2026)', () => {
   const ctx = { window: {} }; vm.runInNewContext(read('js/config.js'), ctx);
-  assert.strictEqual(ctx.window.SUPABASE.SUPABASE_URL, ''); assert.strictEqual(ctx.window.SUPABASE.SUPABASE_ANON_KEY, '');
+  assert.match(ctx.window.SUPABASE.SUPABASE_URL, /^https:\/\/[a-z0-9]{20}\.supabase\.co$/); assert.match(ctx.window.SUPABASE.SUPABASE_ANON_KEY, /^sb_publishable_[A-Za-z0-9_-]+$/);
   assert.match(ctx.window.SUPABASE.libUrl, /^https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2\.\d+\.\d+\//);
   assert.match(ctx.window.SUPABASE.libIntegrity, /^sha384-/);
   assert.strictEqual(Array.from(ctx.window.SITE.adminEmails).join(','), 'david7578433@gmail.com');
@@ -194,8 +194,8 @@ test('client confirmation and My bookings show the bike count, not bike numbers'
 
 test('booking step 1 asks only business / company name, email and phone (client, Nov 8 2026)', () => {
   const c = read('js/client.js');
-  const i = c.indexOf('function renderDetails'), j = c.indexOf('function renderDates');
-  const step1 = c.slice(i, j);
+  const i = c.indexOf('function formField'), j = c.indexOf('function renderDates');
+  const step1 = c.slice(i, j); /* Nov 8 2026 admin menu: the labels live in formField() (and Admin → Booking form can change them) */
   for (const s of ['Business / company name', 'Email address', 'Phone number']) assert.ok(step1.includes(s), s);
   for (const s of ['Where should the bikes ride?', 'Streets or blocks you want', 'What the ad says', 'name="area"', 'name="areaNote"', 'name="adText"', 'Contact name', 'What the ad says']) assert.ok(!step1.includes(s), 'removed: ' + s);
   assert.strictEqual((step1.match(/<input /g) || []).length, 3, 'exactly three inputs');
@@ -207,17 +207,18 @@ test('booking step 1 asks only business / company name, email and phone (client,
 
 test('booking step 1 has an optional "Campaign description" box, saved and shown everywhere (client, Nov 8 2026 3:58 PM)', () => {
   const c = read('js/client.js');
-  const i = c.indexOf('function renderDetails'), j = c.indexOf('function renderDates');
+  const i = c.indexOf('function formField'), j = c.indexOf('function renderDates');
   const step1 = c.slice(i, j);
-  assert.ok(step1.includes('<label>Campaign description<textarea class="input" name="campaign" rows="3"'), 'textarea, 3 rows');
+  assert.ok(step1.includes("campaign: ['Campaign description',") && step1.includes(`box('campaign', '<textarea class="input" name="campaign" rows="3"`), 'textarea, 3 rows');
   assert.ok(step1.includes("(optional)"), 'optional placeholder');
   assert.ok(!/name="campaign"[^>]*required/.test(step1), 'not required');
   // placed after the phone field
   assert.ok(step1.indexOf('name="campaign"') > step1.indexOf('name="phone"'), 'after phone');
   // validation does not ask for it
-  assert.ok(!/campaign[^\n]*err\.textContent/.test(step1), 'no campaign validation');
+  assert.ok(/campaign: \['Campaign description', "What's the campaign about\? \(optional\)", false\]/.test(step1), 'not required by default');
+  assert.ok(/need\('campaign'\) && !b\.adText/.test(step1), 'only checked when the admin makes it required');
   // saved on the booking's existing adText field
-  assert.ok(step1.includes('adText: f.campaign.value.trim()'), 'saved into wiz.biz.adText');
+  assert.ok(step1.includes("adText: val('campaign')"), 'saved into wiz.biz.adText');
   assert.ok(c.includes("adText: b.adText || ''"), 'booking record keeps adText');
   // shown when filled: price summary, confirmation, My bookings, admin row + admin booking view
   assert.ok(c.includes("wiz.biz && wiz.biz.adText ? '<span class=\"campaign-line\">Campaign: '"), 'price summary');

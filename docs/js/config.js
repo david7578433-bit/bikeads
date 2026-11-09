@@ -4,7 +4,8 @@
  *   roles, logins or mentions show while this is false. Set it to true to bring all of it back.
  *   Nothing is deleted either way. */
 window.FEATURES = Object.freeze({
-  delivery: false
+  /* Nov 8 2026: the admin can also switch it in Admin → Switches (remembered here as 'mow.features'; read when the site opens) */
+  delivery: (function () { try { return !!JSON.parse(localStorage.getItem('mow.features') || '{}').delivery; } catch (e) { return false; } })()
 });
 
 /* SHARED DATABASE + SIGN-IN (Supabase). Paste the two values from Supabase → Project Settings → API:
@@ -14,8 +15,9 @@ window.FEATURES = Object.freeze({
  * (steps in PRODUCTION.md). While both are empty the site keeps working in "this device" mode: accounts and data
  * are saved in each browser only, exactly like before. */
 window.SUPABASE = Object.freeze({
-  SUPABASE_URL: '',
-  SUPABASE_ANON_KEY: '',
+  /* Nov 8 2026: David's own Supabase project "mediaonwheels" (his second Supabase account). The publishable key is public by design. */
+  SUPABASE_URL: 'https://exfszekxbgrtpbgggsin.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_eyLYdY0w215I1J2S397PuA_7dYNEImU',
   /* supabase-js, loaded from the CDN only when the keys above are set (pinned version + integrity hash). */
   libUrl: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js',
   libIntegrity: 'sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O',

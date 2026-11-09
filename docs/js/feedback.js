@@ -45,7 +45,7 @@
       const btn = $('#fbsend', f); btn.disabled = true;
       try { await Inbox.sendFeedback(rec); }
       catch (x) { btn.disabled = false; err.textContent = 'Could not send: ' + ((x && x.message) || 'please try again') + '.'; return; }
-      thanks(m, 'Thank you for your feedback!', 'It helps us make the website and our service better.');
+      thanks(m, window.SiteSettings ? SiteSettings.text('msgFeedbackThanks') : 'Thank you for your feedback!', 'It helps us make the website and our service better.');
     });
     return m;
   }
@@ -72,7 +72,7 @@
       const btn = $('#crsend', f); btn.disabled = true;
       try { await Inbox.sendCallRequest(rec); }
       catch (x) { btn.disabled = false; err.textContent = 'Could not send: ' + ((x && x.message) || 'please try again') + '.'; return; }
-      thanks(m, 'Thank you, ' + rec.name.split(' ')[0] + '!', 'We got your request and will call you at ' + rec.phone + (rec.bestTime ? ' (' + rec.bestTime + ')' : '') + '.');
+      thanks(m, 'Thank you' + (rec.name ? ', ' + rec.name.split(' ')[0] : '') + '!', window.SiteSettings ? SiteSettings.text('msgCallThanks').replace(/\{phone\}/g, rec.phone).replace(/\{time\}/g, rec.bestTime || '') : 'We got your request and will call you at ' + rec.phone + '.');
     });
     return m;
   }
