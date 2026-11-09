@@ -31,6 +31,8 @@ test('hero video default is the Boro Park street drive, small files, old drone f
   const v = read('js/homevideo.js');
   for (const a of ['muted', 'loop', 'playsinline', 'autoplay']) assert.match(v, new RegExp(a), a);
   assert.match(v, /prefers-reduced-motion/, 'reduced motion keeps the poster');
+  assert.strictEqual(HV.DEFAULT.phonePoster, 'media/hero-poster-boropark-phone.jpg', 'tall phone cut has its own poster');
+  assert.ok(fs.existsSync(path.join(site, 'media', 'hero-poster-boropark-phone.jpg')));
   assert.ok(read('sw.js').includes('"media/hero-poster-boropark.jpg"'), 'new poster cached for offline');
 });
 

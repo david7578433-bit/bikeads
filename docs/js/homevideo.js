@@ -9,6 +9,7 @@
   const DB = 'bikeads-media', STORE = 'files';
   const DEFAULT = {
     src: 'media/hero-boropark.mp4', phone: 'media/hero-boropark-phone.mp4', poster: 'media/hero-poster-boropark.jpg',
+    phonePoster: 'media/hero-poster-boropark-phone.jpg', /* the phone file is its own tall street-level cut (9:16) */
     credit: 'Street video: Metro Drive / YouTube, CC BY',
     creditUrl: 'https://www.youtube.com/watch?v=7AW62YT1bG0'
   };
@@ -75,7 +76,7 @@
       }
       if (mode === 'file') { const f = await getFile('video'); if (f) return { kind: 'file', src: blobUrl(f), poster, name: s.homeVideoName || 'Uploaded video' }; }
       if (mode === 'url' && okUrl(s.homeVideoUrl)) return { kind: 'url', src: s.homeVideoUrl.trim(), poster };
-      return { kind: 'default', src: phone ? DEFAULT.phone : DEFAULT.src, poster: DEFAULT.poster };
+      return { kind: 'default', src: phone ? DEFAULT.phone : DEFAULT.src, poster: (phone && DEFAULT.phonePoster) || DEFAULT.poster };
     },
     /* Fill a <video> on the main page. Reduced motion: no autoplay, the still poster stays. */
     async mount(video) { /* no credit on the video itself (Nov 8 2026): it is behind the footer's Credits link */
