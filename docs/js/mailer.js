@@ -16,7 +16,8 @@
       name: b ? (b.clientName || b.company || '') : '', company: b ? b.company || '' : '',
       bikes: b ? String((b.bikeIds || []).length) : '', dates: b ? UI.fmtRange(b.start, b.end) : '',
       total: b ? money(b.total) : '', deposit: b ? money(b.deposit) : '', balance: b ? money(b.balance) : '',
-      note: b ? (b.adminNote || '') : '', invoice: b ? (b.invoiceNo || '') : '', link: (window.SITE && SITE.url) || ''
+      note: b ? (b.adminNote || '') : '', invoice: b ? (b.invoiceNo || '') : '', link: (window.SITE && SITE.url) || '',
+      campaigns: b && window.Campaigns && Campaigns.isMulti(b) ? Campaigns.summary(Campaigns.active(b)) : '' /* Nov 8 2026 7 PM: "GB 5, GG 5, Lakefront 5" */
     }, extra || {});
     return String(text || '').replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m));
   }
@@ -25,7 +26,10 @@
     return String((b && (b.contactEmail || b.email)) || ((Data.get('users', b && b.clientId) || {}).email) || '').trim();
   }
   function compose(kind, b, extra) {
-    const subject = fill(S('email.' + kind + '.subject'), b, extra), text = fill(S('email.' + kind + '.body'), b, extra) + (extra && extra.append ? '\n\n' + extra.append : '');
+    const body = S('email.' + kind + '.body');
+    /* an order with several campaigns: the campaigns are listed in the email (unless the text already has {campaigns}, or the invoice lines list them) */
+    const camps = b && window.Campaigns && Campaigns.isMulti(b) && kind !== 'invoice' && !/\{campaigns\}/.test(String(body || '')) ? '\n\nCampaigns:\n' + Campaigns.lines(b, money).map((l) => '• ' + l).join('\n') : '';
+    const subject = fill(S('email.' + kind + '.subject'), b, extra), text = fill(body, b, extra) + camps + (extra && extra.append ? '\n\n' + extra.append : '');
     return { to: recipient(kind, b), subject, text, fromName: S('emailFromName') || Data.settings().businessName || 'Media on Wheels', replyTo: S('emailReplyTo') || '' };
   }
   let lastStatus = null; /* null = not tried yet; 'ok' = sent once; otherwise the reason */

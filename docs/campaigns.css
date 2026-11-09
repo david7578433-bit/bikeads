@@ -1,0 +1,42 @@
+/* Media on Wheels — several campaigns in one request (Nov 8 2026 7 PM, David: an agency like Pivot with GB, GG, Lakefront) */
+.mc-add { margin-top: .9rem; border-style: dashed; border-width: 1.5px; min-height: 48px; font-weight: 700; }
+.mc-intro { margin: .7rem 0 .2rem; }
+.mc-rows { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .8rem; }
+.mc-row { border: 1.5px solid var(--line); border-radius: 18px; padding: .8rem .9rem .9rem; display: grid; gap: .6rem; background: var(--brand-soft, #f6f9fd); }
+.mc-row label { display: grid; gap: .3rem; font-weight: 650; font-size: .92rem; }
+.mc-row label.check { display: flex; align-items: center; gap: .5rem; font-weight: 600; }
+.mc-row label.check input { width: 22px; height: 22px; }
+.mc-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.mc-head b { font-size: 1rem; }
+.mc-del { border: 0; background: transparent; color: #b91c1c; font-weight: 700; font-size: .88rem; min-height: 40px; padding: 0 .4rem; cursor: pointer; }
+.mc-bikes { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.mc-bikes .stepper button { width: 46px; height: 46px; }
+.mc-bikes .stepper input { width: 60px; height: 46px; color: var(--ink); font-family: inherit; padding: 0; }
+.mc-dates[hidden] { display: none !important; }
+.mc-dates { gap: .6rem; }
+.mc-sum { margin-top: .9rem; border-top: 1px solid var(--line); padding-top: .8rem; display: grid; gap: .35rem; }
+.mc-total { display: flex; flex-wrap: wrap; gap: .2rem .6rem; align-items: baseline; }
+.mc-total b { font-size: 1.05rem; }
+.mc-total span { color: var(--muted); font-size: .9rem; }
+.ok-line { color: #15803d; margin: 0; font-weight: 650; }
+.mc-sum .err { margin: 0; }
+.price-table.multi .camp-row td { padding-top: .75rem; }
+.price-table.multi .camp-row .calc { display: block; }
+.camp-name { font-size: 1rem; }
+.camp-list { list-style: none; margin: .45rem 0 .2rem; padding: 0; display: grid; gap: .4rem; }
+.camp-item, .camp-card { border: 1px solid var(--line); border-radius: 14px; padding: .55rem .75rem; background: #fff; display: grid; gap: .2rem; text-align: left; }
+.camp-item.off, .camp-card.off { opacity: .6; }
+.camp-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .1rem .6rem; align-items: baseline; }
+.camp-top span { font-size: .88rem; color: var(--ink2, #3a4150); font-weight: 600; white-space: nowrap; }
+.camp-admin { display: grid; gap: .7rem; }
+.camp-card .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.camp-card .chip { min-height: 28px; padding: .1rem .55rem; font-size: .82rem; border: 1px solid var(--line); background: var(--brand-soft, #f3f8fd); }
+.camp-card .row-end { gap: .4rem; flex-wrap: wrap; }
+.camp-pick { border-top: 1px dashed var(--line); padding-top: .5rem; margin-top: .3rem; }
+.camp-pick[hidden] { display: none; }
+.cl-group { display: flex; flex-direction: column; gap: .1rem; padding: .8rem .2rem .3rem; border-bottom: 2px solid var(--line); margin-top: .4rem; }
+.cl-group b { font-size: 1.02rem; }
+.inv-camp td:first-child { font-weight: 650; }
+.confirm-card .camp-list { margin: 0; }
+.confirm-card dd:has(> .camp-list) { grid-column: 1 / -1; }
+.inv-camp td:nth-child(2) { font-size: .88rem; }

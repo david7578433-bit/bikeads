@@ -111,3 +111,14 @@ Local stores hand deliveries to BikeAds riders. Four plugins share one data laye
 - `test/` — `node --test`
 
 Map tiles © OpenStreetMap contributors. For heavy traffic use a tile provider with a key (MapTiler, Stadia, etc.) per OSM's tile policy.
+
+## Several campaigns in one request (Nov 8 2026, 7 PM)
+A marketing company (e.g. "Pivot Marketing") can send ONE request with several campaigns, one per brand (GB 5 bikes, GG 5,
+Lakefront 5). Step 2 → "+ Add another campaign": each campaign has a name, a number of bikes, optional different dates and
+an optional description. Bikes are counted per day across all campaigns; the minimum bikes counts the whole order (Admin →
+Booking form → "Minimum bikes applies to" can make it each campaign; "Allow multiple campaigns per request" turns the
+button off). Price = printing & setup per bike + weekly per bike, per campaign, then discounts on the whole order.
+Admin: the booking shows its campaigns and bikes, "Campaigns & bikes" changes bikes per campaign or declines one campaign
+(before approval); Approve / Decline is for the whole order; the invoice lists each campaign; Clients are grouped by company.
+Code: `docs/js/campaigns.js`, `docs/js/campaigns-admin.js`, `docs/campaigns.css`. Database: campaigns live in the booking's
+JSON (`data->'campaigns'`); `supabase/migrations/20261109_multi_campaign.sql` (bike holds per campaign, view `mow_booking_campaigns`).

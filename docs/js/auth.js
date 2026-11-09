@@ -92,7 +92,8 @@
       if (profile.role !== 'admin') { /* other clients' bookings: only which bikes are taken on which days, no names */
         const holds = await sb.rpc('mow_bike_holds');
         if (!holds.error) (holds.data || []).forEach((h) => {
-          if (st.bookings.some((b) => b.id === h.id)) return;
+          const own = String(h.id).split('#')[0]; /* Nov 8 2026 7 PM: an order with several campaigns comes back as one row per campaign (id#campaign) */
+          if (st.bookings.some((b) => b.id === h.id || b.id === own)) return;
           st.bookings.push({ id: h.id, _hold: true, clientId: '', clientName: '', company: '', start: h.start_date, end: h.end_date, bikeIds: h.bike_ids || [], status: h.status, history: [] });
         });
       }

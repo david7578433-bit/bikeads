@@ -167,11 +167,18 @@
         .filter((u) => !q || (u.name + ' ' + u.company + ' ' + u.email + ' ' + u.phone).toLowerCase().includes(q))
         .sort((a, b) => (a.role === b.role ? String(a.name).localeCompare(String(b.name)) : a.role === 'admin' ? -1 : 1));
       const nb = (u) => Data.list('bookings').filter((b) => b.clientId === u.id).length;
-      $('#cl-list', root).innerHTML = users.length ? users.map((u) => '<li class="cl-item' + (u.disabled ? ' off' : '') + '"><div><b>' + esc(u.name || u.email) + '</b>' + (u.role === 'admin' ? ' <span class="role-pill admin">Admin</span>' : '') + (u.disabled ? ' <span class="badge st-declined">Turned off</span>' : '') +
+      const item = (u) => '<li class="cl-item' + (u.disabled ? ' off' : '') + '"><div><b>' + esc(u.name || u.email) + '</b>' + (u.role === 'admin' ? ' <span class="role-pill admin">Admin</span>' : '') + (u.disabled ? ' <span class="badge st-declined">Turned off</span>' : '') +
         '<span class="small muted">' + esc([u.company, u.email, u.phone].filter(Boolean).join(' · ')) + '</span><span class="small muted">' + nb(u) + ' booking' + (nb(u) === 1 ? '' : 's') + (u.createdAt ? ' · joined ' + esc(fmtDate(String(u.createdAt).slice(0, 10))) : '') + '</span></div>' +
         '<div class="cl-actions"><button class="btn ghost small-btn" data-cview="' + esc(u.id) + '">View</button>' +
         (u.id === (me && me.id) ? '<span class="small muted">You</span>' : (u.role === 'admin' ? '<button class="btn ghost small-btn" data-crole="' + esc(u.id) + '">Remove admin</button>' : '<button class="btn ghost small-btn" data-crole="' + esc(u.id) + '">Make admin</button>') +
-          '<button class="btn ' + (u.disabled ? 'ghost' : 'danger-ghost') + ' small-btn" data-cdis="' + esc(u.id) + '">' + (u.disabled ? 'Turn on' : 'Turn off') + '</button>') + '</div></li>').join('') : '<li class="muted pad">No accounts yet. When a client creates an account, it shows here.</li>';
+          '<button class="btn ' + (u.disabled ? 'ghost' : 'danger-ghost') + ' small-btn" data-cdis="' + esc(u.id) + '">' + (u.disabled ? 'Turn on' : 'Turn off') + '</button>') + '</div></li>';
+      /* Nov 8 2026 7 PM: grouped by company / agency (e.g. Pivot Marketing with its campaigns) */
+      const groups = window.CampaignsAdmin ? CampaignsAdmin.groupByCompany(users) : [{ company: '', users }];
+      const head = (g) => { const ids = new Set(g.users.map((u) => u.id)), bk = Data.list('bookings').filter((b) => ids.has(b.clientId));
+        const camps = []; bk.forEach((b) => (window.Campaigns ? Campaigns.active(b) : []).forEach((c) => { if (!camps.includes(c.name)) camps.push(c.name); }));
+        return '<li class="cl-group"><b>' + esc(g.company || 'No company name') + '</b><span class="small muted">' + g.users.length + ' account' + (g.users.length === 1 ? '' : 's') + ' · ' + bk.length + ' order' + (bk.length === 1 ? '' : 's') +
+          (camps.length ? ' · campaigns: ' + esc(camps.join(', ')) : '') + '</span></li>'; };
+      $('#cl-list', root).innerHTML = users.length ? groups.map((g) => head(g) + g.users.map(item).join('')).join('') : '<li class="muted pad">No accounts yet. When a client creates an account, it shows here.</li>';
     };
     root.innerHTML = '<section class="page adm-page"><div class="page-head"><h1>Clients</h1></div>' +
       '<div class="card"><input class="input search" type="search" id="cl-q" placeholder="Search name, company, email, phone…" aria-label="Search clients"><ul class="cl-list" id="cl-list"></ul></div></section>';
@@ -191,7 +198,7 @@
     const u = Data.get('users', id); if (!u) return;
     const bks = Data.list('bookings').filter((b) => b.clientId === u.id).sort((a, b) => (a.start < b.start ? 1 : -1));
     modal(u.name || u.email, '<dl class="kv"><dt>Company</dt><dd>' + esc(u.company || '—') + '</dd><dt>Email</dt><dd>' + esc(u.email || '—') + '</dd><dt>Phone</dt><dd>' + esc(u.phone || '—') + '</dd><dt>Role</dt><dd>' + (u.role === 'admin' ? 'Admin' : 'Client') + (u.disabled ? ' (turned off)' : '') + '</dd></dl>' +
-      '<h3>Bookings</h3>' + (bks.length ? '<ul class="dash-list">' + bks.map((b) => '<li><span><b>' + esc(UI.fmtRange(b.start, b.end)) + '</b> ' + badge(b) + '<span>' + (b.bikeIds || []).length + ' bikes · ' + esc(money(b.total)) + '</span></span></li>').join('') + '</ul>' : '<p class="muted">No bookings yet.</p>') +
+      '<h3>Bookings</h3>' + (bks.length ? '<ul class="dash-list">' + bks.map((b) => '<li><span><b>' + esc(UI.fmtRange(b.start, b.end)) + '</b> ' + badge(b) + '<span>' + (b.bikeIds || []).length + ' bikes · ' + esc(money(b.total)) + (window.Campaigns && Campaigns.isMulti(b) ? ' · ' + esc(Campaigns.summary(Campaigns.active(b))) : '') + '</span></span></li>').join('') + '</ul>' : '<p class="muted">No bookings yet.</p>') +
       '<div class="row-end"><button class="btn ghost" data-close>Close</button></div>');
   }
 
@@ -306,16 +313,21 @@
     const D = (n) => Mailer.money(n);
     const paidDep = x.depositPaid ? +x.deposit || 0 : 0, paidBal = x.balancePaid ? +x.balance || 0 : 0;
     const due = Math.max(0, (+x.total || 0) - paidDep - paidBal);
-    const rows = [['Printing & setup', (x.bikeIds || []).length + ' bikes × ' + D(x.setupFeePerBike) + ' (one time)', x.setupTotal],
-      ['Weekly charge', (x.bikeIds || []).length + ' bikes × ' + D(x.weeklyPerBike) + ' a week × ' + x.weeks + ' week' + (x.weeks > 1 ? 's' : ''), x.weeklyTotal]]
+    const multi = !!(window.Campaigns && Campaigns.isMulti(x));
+    const wk = (n) => n + ' week' + (n > 1 ? 's' : '');
+    /* Nov 8 2026 7 PM: an order with several campaigns lists each campaign as its own lines */
+    const rows = (multi ? Campaigns.active(x).map((c) => { const n = (c.bikeIds || []).length || c.bikes;
+      return ['Campaign: ' + c.name, n + ' bikes · ' + UI.fmtRange(c.start, c.end) + ' · ' + wk(c.weeks) + ' · setup ' + D(c.setup) + ' + weekly ' + D(c.weekly), c.subtotal]; }) :
+      [['Printing & setup', (x.bikeIds || []).length + ' bikes × ' + D(x.setupFeePerBike) + ' (one time)', x.setupTotal],
+      ['Weekly charge', (x.bikeIds || []).length + ' bikes × ' + D(x.weeklyPerBike) + ' a week × ' + x.weeks + ' week' + (x.weeks > 1 ? 's' : ''), x.weeklyTotal]])
       .concat((x.discounts || []).map((d) => ['Discount: ' + d.label, d.pct + '% off' + (x.promoCode && d.kind === 'promo' ? ' (code ' + x.promoCode + ')' : ''), -d.amount]));
     root.innerHTML = '<section class="page adm-page"><div class="page-head"><a class="back" href="#/admin/bookings">‹ Bookings</a><h1>Invoice</h1></div>' +
       '<div class="inv-actions"><button class="btn primary" id="inv-print">Print / Save as PDF</button><button class="btn" id="inv-mail">Email to client</button></div><p class="center small muted" id="inv-status">' + esc(lastMail(x)) + '</p>' +
       '<article class="invoice" id="invoice"><div class="inv-head"><div><h2>' + esc(s.businessName || 'Media on Wheels') + '</h2><div class="small">' + esc([hc.contactPhone, hc.contactEmail, SS().get('contactAddress')].filter(Boolean).join(' · ')) + '</div></div>' +
       '<div class="inv-meta"><b>INVOICE ' + esc(x.invoiceNo) + '</b><br>Date: ' + esc(fmtDate(String(x.invoiceAt || new Date().toISOString()).slice(0, 10))) + '<br>Booking: BK-' + esc(String(x.id).slice(-6).toUpperCase()) + '</div></div>' +
-      '<p class="inv-to"><b>Bill to:</b> ' + esc(x.company || '') + (x.clientName ? ', ' + esc(x.clientName) : '') + (x.contactEmail ? '<br>' + esc(x.contactEmail) : '') + (x.contactPhone ? ' · ' + esc(x.contactPhone) : '') + '<br><b>Dates:</b> ' + esc(UI.fmtRange(x.start, x.end)) + ' (' + Data.days(x.start, x.end) + ' days)' + (x.adText ? '<br><b>Campaign:</b> ' + esc(x.adText) : '') + '</p>' +
+      '<p class="inv-to"><b>Bill to:</b> ' + esc(x.company || '') + (x.clientName ? ', ' + esc(x.clientName) : '') + (x.contactEmail ? '<br>' + esc(x.contactEmail) : '') + (x.contactPhone ? ' · ' + esc(x.contactPhone) : '') + '<br><b>Dates:</b> ' + esc(UI.fmtRange(x.start, x.end)) + ' (' + Data.days(x.start, x.end) + ' days)' + (x.adText ? '<br><b>' + (multi ? 'About the order' : 'Campaign') + ':</b> ' + esc(x.adText) : '') + (multi ? '<br><b>Campaigns:</b> ' + Campaigns.active(x).length + ' (' + esc(Campaigns.summary(Campaigns.active(x))) + ')' : '') + '</p>' +
       '<table class="inv-table"><thead><tr><th>Item</th><th>Details</th><th class="amt">Amount</th></tr></thead><tbody>' +
-      rows.map((r) => '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="amt">' + (r[2] < 0 ? '−' : '') + esc(D(Math.abs(r[2] || 0))) + '</td></tr>').join('') +
+      rows.map((r) => '<tr' + (multi && /^Campaign: /.test(r[0]) ? ' class="inv-camp"' : '') + '><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="amt">' + (r[2] < 0 ? '−' : '') + esc(D(Math.abs(r[2] || 0))) + '</td></tr>').join('') +
       '<tr class="inv-total"><td colspan="2">Total</td><td class="amt">' + esc(D(x.total)) + '</td></tr>' +
       '<tr><td colspan="2">Deposit (' + (x.depositPct != null ? x.depositPct : 20) + '%)' + (x.depositPaid ? ' — paid' : ' — not paid yet') + '</td><td class="amt">' + (x.depositPaid ? '−' : '') + esc(D(x.deposit)) + '</td></tr>' +
       (x.balancePaid ? '<tr><td colspan="2">Balance — paid</td><td class="amt">−' + esc(D(x.balance)) + '</td></tr>' : '') +

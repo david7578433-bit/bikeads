@@ -14,12 +14,16 @@
   /* Nov 8 2026: discounts (admin price table) + promo code for this booking */
   let me = null;
   const quoteOpts = () => ({ promo: wiz.promo || null, client: me ? { id: me.id, email: me.email } : null });
-  const quote = () => (wiz.payFor && Data.get('bookings', wiz.payFor) ? bookingQuote(Data.get('bookings', wiz.payFor)) : Data.priceQuote(wiz.count, wiz.start, wiz.end, quoteOpts()));
+  const quote = () => (wiz.payFor && Data.get('bookings', wiz.payFor) ? bookingQuote(Data.get('bookings', wiz.payFor)) : MULTI() ? Data.priceQuoteMulti(effCampaigns(), quoteOpts()) : Data.priceQuote(wiz.count, wiz.start, wiz.end, quoteOpts()));
+  /* Nov 8 2026 7 PM (David): several campaigns in one request ("Add another campaign"), see js/campaigns.js */
+  const MULTI = () => !!(window.Campaigns && wiz.campaigns && wiz.campaigns.length > 1 && !wiz.payFor);
+  const effCampaigns = () => Campaigns.resolve(wiz.campaigns, wiz.start, wiz.end);
+  const multiOpts = () => { const wMin = Math.max(1, +SSET('weeksMin', 1) || 1); return { earliest: window.SiteSettings ? SiteSettings.earliest() : Data.today(), weeksMin: wMin, weeksMax: Math.max(wMin, +SSET('weeksMax', 52) || 52), area: wiz.area }; };
   /* Nov 8 2026 (David 5:13 PM: "he is not booking it. He is only requesting it"): a request first, the deposit after approval. */
   const REQ = () => SSET('requestFirst', true) !== false;
   const bookingQuote = (b) => ({ bikes: b.bikeIds.length, total: b.total, deposit: b.deposit, balance: b.balance, depositPct: b.depositPct, days: Data.days(b.start, b.end), weeks: b.weeks });
   const minNote = () => '<p class="small muted min-note">Minimum ' + MIN_BIKES() + ' bikes</p>';
-  const blank = () => ({ step: 'details', start: null, end: null, count: 5, promo: null, bikeIds: [], specific: false, mode: 'count', area: '', areaNote: '', biz: null, lastId: null, payFor: null });
+  const blank = () => ({ step: 'details', start: null, end: null, count: 5, promo: null, bikeIds: [], specific: false, mode: 'count', area: '', areaNote: '', biz: null, lastId: null, payFor: null, campaigns: [] });
   const wiz = Object.assign(blank(), { calY: null, calM: null });
   function resetWiz() { const y = wiz.calY, m = wiz.calM; Object.assign(wiz, blank(), { calY: y, calM: m }); }
   function teardown() { if (ride) { ride.destroy(); ride = null; } }
@@ -62,7 +66,7 @@
 
   /* ---- step 1: business details + area ---- */
   function formField(id) {
-    const D = { company: ['Business / company name (shown on the ads)', 'e.g. Fresh Basket Grocery', true], email: ['Email address', '', true], phone: ['Phone number', '(845) 555-0123', true], campaign: ['Campaign description', "What's the campaign about? (optional)", false] }[id];
+    const D = { company: ['Business / company name (shown on the ads)', 'e.g. Fresh Basket Grocery, or an agency like Pivot Marketing', true], email: ['Email address', '', true], phone: ['Phone number', '(845) 555-0123', true], campaign: ['Campaign description', "What's the campaign about? (optional)", false] }[id];
     return window.SiteSettings ? SiteSettings.field(id) : { show: true, required: D[2], label: D[0], help: D[1] };
   }
   function box(id, open, inner) {
@@ -150,20 +154,21 @@
           return '<span class="free ' + (n === 0 ? 'none' : n < 5 ? 'low' : '') + '">' + (n === 0 ? 'full' : '<b>' + n + '</b><i> free</i>') + '</span>';
         }
       }) + '</div>' +
-      '<section class="card"><h2>How many bikes?</h2>' + sel +
-      '<div class="bike-row" style="margin-top:.7rem"><div><strong>' + (wiz.specific ? 'Bikes you picked' : 'Number of bikes') + '</strong><div class="small muted">' + (wiz.start && wiz.end ? free.length + ' of ' + fleet + ' bikes free for these dates' : fleet + ' bikes in the fleet · pick dates to see what is free') + '</div></div>' +
+      '<section class="card' + (MULTI() ? ' multi-camp' : '') + '"><h2>' + (MULTI() ? 'Your campaigns' : 'How many bikes?') + '</h2>' + sel +
+      (MULTI() ? multiHtml() : '<div class="bike-row" style="margin-top:.7rem"><div><strong>' + (wiz.specific ? 'Bikes you picked' : 'Number of bikes') + '</strong><div class="small muted">' + (wiz.start && wiz.end ? free.length + ' of ' + fleet + ' bikes free for these dates' : fleet + ' bikes in the fleet · pick dates to see what is free') + '</div></div>' +
       '<div class="stepper" role="group" aria-label="Number of bikes"><button type="button" id="minus" aria-label="One bike less"' + (wiz.count <= MIN_BIKES() || wiz.specific ? ' disabled' : '') + '>−</button><input id="cnt" type="number" inputmode="numeric" min="' + MIN_BIKES() + '" max="' + MAX_BIKES() + '" step="1" value="' + wiz.count + '" aria-label="Number of bikes"' + (wiz.specific ? ' disabled' : '') + '><button type="button" id="plus" aria-label="One bike more"' + (wiz.count >= MAX_BIKES() || wiz.specific ? ' disabled' : '') + '>+</button></div></div>' + /* Nov 8 2026 (David): no "Minimum 5 bikes" line; the minus button simply stops at 5 */
       (weeksBad ? '<p class="err" id="weeks-bad">A booking is ' + (wMin === wMax ? wMin : 'from ' + wMin + ' to ' + wMax) + ' week' + (wMax > 1 ? 's' : '') + ' long. Please pick other dates.</p>' : '') +
       (wiz.specific && wiz.bikeIds.length < MIN_BIKES() ? '<p class="err">Please pick at least ' + MIN_BIKES() + ' bikes (you picked ' + wiz.bikeIds.length + ').</p>' : '') +
       (wiz.start && wiz.end && free.length && free.length < MIN_BIKES() ? '<p class="err">Only ' + free.length + ' bikes are free on these days, and a booking is at least ' + MIN_BIKES() + ' bikes. Please try other dates.</p>' : '') +
       (wiz.start && wiz.end && !wiz.specific && free.length >= MIN_BIKES() && wiz.count > free.length ? '<p class="err" id="too-many">Only ' + free.length + ' bikes are free on these days. Please pick ' + free.length + ' or fewer, or other dates.</p>' : '') +
+      (window.Campaigns && Campaigns.enabled() && !wiz.payFor ? '<button type="button" class="btn ghost wide mc-add" id="mc-add1">+ Add another campaign</button>' : '') + /* Nov 8 2026 7 PM: an agency adds one campaign per brand */
       '<details class="mt"' + (wiz.specific ? ' open' : '') + '><summary class="small" style="cursor:pointer;font-weight:650">Pick specific bike numbers (optional)</summary>' +
       '<div class="bike-grid" style="margin-top:.6rem">' + all.map((x) => {
         const ok = freeIds.has(x.id), loc = Data.get('locations', x.locationId);
         return '<button type="button" class="bike-tile' + (chosen.has(x.id) ? ' on' : '') + (ok ? '' : ' busy') + '" data-bike="' + x.id + '"' + (ok ? '' : ' disabled') + ' aria-pressed="' + chosen.has(x.id) + '"><span class="num">' + esc(x.number) + '</span><span class="small">' + esc(loc ? loc.name : '') + '</span><span class="small">' + (ok ? 'Free' : 'Booked') + '</span></button>';
-      }).join('') + '</div>' + (wiz.specific ? '<button type="button" class="btn ghost small-btn" id="clearpick" style="margin-top:.5rem">Clear, just give me any free bikes</button>' : '') + '</details>' +
-      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="confirm"' + (wiz.start && wiz.end && !weeksBad && wiz.count >= MIN_BIKES() && free.length >= MIN_BIKES() && wiz.count <= free.length ? '' : ' disabled') + '>' + (REQ() ? 'Next: see the price ›' : 'Confirm booking ›') + '</button></div>' +
-      (wiz.start && wiz.end && !free.length ? (Data.list('bikes').length ? '<p class="err">No bikes are free for all of these days. Try other dates.</p>' : '<p class="err">Our bikes are being set up in the system right now, so they cannot be booked online yet. Please check back soon.</p>') : '') + '</section>' +
+      }).join('') + '</div>' + (wiz.specific ? '<button type="button" class="btn ghost small-btn" id="clearpick" style="margin-top:.5rem">Clear, just give me any free bikes</button>' : '') + '</details>') +
+      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="confirm"' + (MULTI() ? (wiz.start && wiz.end && Campaigns.check(effCampaigns(), multiOpts()).ok ? '' : ' disabled') : wiz.start && wiz.end && !weeksBad && wiz.count >= MIN_BIKES() && free.length >= MIN_BIKES() && wiz.count <= free.length ? '' : ' disabled') + '>' + (REQ() ? 'Next: see the price ›' : 'Confirm booking ›') + '</button></div>' +
+      (wiz.start && wiz.end && !free.length && !MULTI() ? (Data.list('bikes').length ? '<p class="err">No bikes are free for all of these days. Try other dates.</p>' : '<p class="err">Our bikes are being set up in the system right now, so they cannot be booked online yet. Please check back soon.</p>') : '') + '</section>' +
       /* Nov 8 2026 (David: "Take down this map"): the "More bikes, more streets" bike animation is off this step (rideCard kept in the code) */
       '</section>';
     $('#back', root).addEventListener('click', () => go('details'));
@@ -184,11 +189,22 @@
     /* Nov 8 2026 (David: "What if I want ten?"): + always goes up (6, 7 … 10 and more), the number can be typed, and − stops at the minimum.
      * If more bikes are asked for than are free on the picked days, a short note says so and Confirm waits. */
     const setCount = (n) => { wiz.count = clampCount(n); App.render(); };
+    if (MULTI()) wireMulti(root);
+    else {
     $('#minus', root).addEventListener('click', () => setCount(wiz.count - 1));
     $('#plus', root).addEventListener('click', () => setCount(wiz.count + 1));
     const cnt = $('#cnt', root);
     cnt.addEventListener('change', () => setCount(parseInt(cnt.value, 10)));
     cnt.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); setCount(parseInt(cnt.value, 10)); } });
+    const add1 = $('#mc-add1', root);
+    if (add1) add1.addEventListener('click', () => {
+      const biz = wiz.biz || {};
+      wiz.specific = false; wiz.bikeIds = [];
+      wiz.campaigns = [Campaigns.row({ bikes: Math.max(Campaigns.rowMin(), wiz.count), adText: biz.adText || '' }), Campaigns.row()];
+      App.render();
+      const n = document.querySelectorAll('[data-mc="name"]'); if (n[0]) n[0].focus();
+    });
+    }
     $$('[data-bike]', root).forEach((b) => b.addEventListener('click', () => {
       const id = b.getAttribute('data-bike');
       const s = new Set(wiz.bikeIds); if (s.has(id)) s.delete(id); else s.add(id);
@@ -198,22 +214,129 @@
     $('#confirm', root).addEventListener('click', () => go('price'));
   }
 
+
+  /* ---- step 2, several campaigns (Nov 8 2026 7 PM, David: "Pivot … five bikes for GB, five bikes for GG, five for Lakefront") ---- */
+  const EX = ['GB', 'GG', 'Lakefront'];
+  function multiHtml() {
+    const earliest = window.SiteSettings ? SiteSettings.earliest() : Data.today(), mn = Campaigns.rowMin();
+    return '<p class="small muted mc-intro">One request, several campaigns (for example one for each brand). Each campaign gets its own bikes. They use the dates above unless you tap “Different dates”.</p>' +
+      '<ol class="mc-rows" id="mc-rows">' + wiz.campaigns.map((r, i) => '<li class="mc-row" data-row="' + esc(r.id) + '"><div class="mc-head"><b>Campaign ' + (i + 1) + '</b><button type="button" class="mc-del" data-mc-del="' + esc(r.id) + '" aria-label="Remove campaign ' + (i + 1) + '">✕ Remove</button></div>' +
+        '<label>Campaign / brand name<input class="input" data-mc="name" value="' + esc(r.name) + '" placeholder="e.g. ' + EX[i % 3] + '" maxlength="60" autocomplete="off"></label>' +
+        '<div class="mc-bikes"><strong>Bikes</strong><div class="stepper" role="group" aria-label="Bikes for campaign ' + (i + 1) + '"><button type="button" data-mc-step="-1" aria-label="One bike less">−</button><input type="number" inputmode="numeric" data-mc="bikes" min="' + mn + '" step="1" value="' + (+r.bikes || mn) + '" aria-label="Bikes for campaign ' + (i + 1) + '"><button type="button" data-mc-step="1" aria-label="One bike more">+</button></div></div>' +
+        '<label class="check mc-own"><input type="checkbox" data-mc="own"' + (r.own ? ' checked' : '') + '> Different dates for this campaign</label>' +
+        '<div class="two mc-dates"' + (r.own ? '' : ' hidden') + '><label>From<input class="input" type="date" data-mc="start" min="' + earliest + '" value="' + esc(r.start || wiz.start || '') + '"></label><label>Till<input class="input" type="date" data-mc="end" min="' + earliest + '" value="' + esc(r.end || wiz.end || '') + '"></label></div>' +
+        '<label>Description (optional)<textarea class="input" data-mc="adText" rows="2" maxlength="400" placeholder="What is this campaign about? Ad artwork notes…">' + esc(r.adText) + '</textarea></label></li>').join('') + '</ol>' +
+      '<button type="button" class="btn ghost wide mc-add" id="mc-add">+ Add another campaign</button>' +
+      '<div class="mc-sum" id="mc-sum" role="status" aria-live="polite">' + multiSum() + '</div>';
+  }
+  function multiSum() {
+    const eff = effCampaigns(), n = Campaigns.total(eff);
+    const chk = wiz.start && wiz.end ? Campaigns.check(eff, multiOpts()) : null;
+    return '<div class="mc-total"><b>' + n + ' bike' + (n === 1 ? '' : 's') + ' in ' + Campaigns.word(eff.length) + '</b><span>' + esc(Campaigns.summary(eff)) + '</span></div>' +
+      (!wiz.start || !wiz.end ? '<p class="small muted">Pick the dates on the calendar first.</p>' : chk.ok ? '<p class="small ok-line">✓ Enough bikes are free on every day.</p>' : chk.errors.slice(0, 3).map((e) => '<p class="err">' + esc(e) + '</p>').join(''));
+  }
+  function refreshMulti(root) {
+    const s = $('#mc-sum', root); if (s) s.innerHTML = multiSum();
+    const ok = !!(wiz.start && wiz.end && Campaigns.check(effCampaigns(), multiOpts()).ok);
+    const btn = $('#confirm', root); if (btn) btn.disabled = !ok;
+  }
+  function wireMulti(root) {
+    const rowOf = (el) => { const li = el.closest('[data-row]'); return li ? wiz.campaigns.find((r) => r.id === li.getAttribute('data-row')) : null; };
+    const host = $('#mc-rows', root);
+    const onField = (e) => {
+      const el = e.target.closest('[data-mc]'); if (!el) return;
+      const r = rowOf(el); if (!r) return;
+      const k = el.getAttribute('data-mc');
+      if (k === 'own') {
+        r.own = el.checked;
+        const d = el.closest('.mc-row').querySelector('.mc-dates'); d.hidden = !r.own;
+        if (r.own) { r.start = r.start || wiz.start; r.end = r.end || wiz.end; d.querySelector('[data-mc="start"]').value = r.start || ''; d.querySelector('[data-mc="end"]').value = r.end || ''; }
+      } else if (k === 'bikes') r.bikes = Math.max(0, parseInt(el.value, 10) || 0);
+      else if (k === 'start' || k === 'end') { r[k] = el.value || null; if (r.start && r.end && r.end < r.start && k === 'start') { r.end = r.start; el.closest('.mc-dates').querySelector('[data-mc="end"]').value = r.end; } }
+      else r[k] = el.value;
+      refreshMulti(root);
+    };
+    host.addEventListener('input', onField);
+    host.addEventListener('change', onField);
+    host.addEventListener('click', (e) => {
+      const st = e.target.closest('[data-mc-step]');
+      if (st) {
+        const r = rowOf(st), inp = st.parentNode.querySelector('[data-mc="bikes"]');
+        r.bikes = Math.max(Campaigns.rowMin(), Math.min(Campaigns.maxBikes(), (parseInt(inp.value, 10) || 0) + (+st.getAttribute('data-mc-step'))));
+        inp.value = r.bikes; refreshMulti(root); return;
+      }
+      const del = e.target.closest('[data-mc-del]');
+      if (del) {
+        wiz.campaigns = wiz.campaigns.filter((r) => r.id !== del.getAttribute('data-mc-del'));
+        if (wiz.campaigns.length < 2) { /* back to the simple one-campaign look */
+          const one = wiz.campaigns[0];
+          if (one) { wiz.count = clampCount(one.bikes); if (wiz.biz && one.adText && !wiz.biz.adText) wiz.biz.adText = one.adText; }
+          wiz.campaigns = [];
+        }
+        App.render();
+      }
+    });
+    $('#mc-add', root).addEventListener('click', () => {
+      wiz.campaigns.push(Campaigns.row()); App.render();
+      const n = document.querySelectorAll('[data-mc="name"]'); if (n.length) { n[n.length - 1].focus(); n[n.length - 1].scrollIntoView({ block: 'center' }); }
+    });
+  }
+
+  function tailRows(q) {
+    return (q.discounts || []).map((x) => '<tr class="disc"><td>Discount: ' + esc(x.label) + '<span class="calc">' + x.pct + '% off</span></td><td class="amt">−' + money(x.amount) + '</td></tr>').join('') +
+      '<tr class="total"><td>Total</td><td class="amt" id="grand">' + money(q.total) + '</td></tr>' +
+      '<tr class="dep"><td><strong>' + (REQ() && !wiz.payFor ? 'Deposit after we approve' : 'Deposit due now') + ' (' + q.depositPct + '%)</strong></td><td class="amt"><strong>' + money(q.deposit) + '</strong></td></tr>' +
+      '<tr class="bal"><td>Balance later<span class="calc">paid before the ads start; we confirm the date with you</span></td><td class="amt">' + money(q.balance) + '</td></tr>';
+  }
   function priceTable(q) {
     const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
     return '<table class="price-table"><tbody>' +
       '<tr><td>Printing & setup<span class="calc">' + plural(q.bikes, 'bike') + ' × ' + money(q.setupEach) + ' one-time fee</span></td><td class="amt">' + money(q.setup) + '</td></tr>' +
       '<tr><td>Weekly charge<span class="calc">' + plural(q.bikes, 'bike') + ' × ' + money(q.weeklyEach) + ' a week × ' + plural(q.weeks, 'week') + '</span></td><td class="amt">' + money(q.weekly) + '</td></tr>' +
       '<tr class="sub"><td>Subtotal</td><td class="amt">' + money(q.subtotal) + '</td></tr>' +
-      (q.discounts || []).map((x) => '<tr class="disc"><td>Discount: ' + esc(x.label) + '<span class="calc">' + x.pct + '% off</span></td><td class="amt">−' + money(x.amount) + '</td></tr>').join('') +
-      '<tr class="total"><td>Total</td><td class="amt" id="grand">' + money(q.total) + '</td></tr>' +
-      '<tr class="dep"><td><strong>' + (REQ() && !wiz.payFor ? 'Deposit after we approve' : 'Deposit due now') + ' (' + q.depositPct + '%)</strong></td><td class="amt"><strong>' + money(q.deposit) + '</strong></td></tr>' +
-      '<tr class="bal"><td>Balance later<span class="calc">paid before the ads start; we confirm the date with you</span></td><td class="amt">' + money(q.balance) + '</td></tr></tbody></table>';
+      tailRows(q) + '</tbody></table>';
+  }
+  function wirePromo(root) {
+    $('#promo', root).addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = e.target.code.value.trim(), msg = $('#promo-msg', root);
+      if (!code) { wiz.promo = null; App.render(); return; }
+      msg.textContent = 'Checking…';
+      let rule = null;
+      try { rule = window.Auth && Auth.remote ? await Auth.checkPromo(code) : Data.findPromo(code); } catch (ex) { rule = null; }
+      if (!rule) { wiz.promo = null; msg.textContent = 'That code is not valid.'; $('#ptab', root).innerHTML = (MULTI() ? priceTableMulti : priceTable)(quote()); return; }
+      wiz.promo = Object.assign({}, rule, { code: rule.code || code }); App.render();
+    });
+  }
+  /* Price step for several campaigns: each campaign is its own block of lines, then the order total. */
+  function priceTableMulti(q) {
+    const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+    return '<table class="price-table multi"><tbody>' + q.campaigns.map((l) =>
+      '<tr class="camp-row"><td><b class="camp-name">' + esc(l.name) + '</b><span class="calc">' + plural(l.bikes, 'bike') + ' · ' + esc(fmtRange(l.start, l.end)) + ' · ' + plural(l.weeks, 'week') + '</span>' +
+        '<span class="calc">Printing & setup ' + l.bikes + ' × ' + money(q.setupEach) + ' = ' + money(l.setup) + '</span><span class="calc">Weekly ' + l.bikes + ' × ' + money(q.weeklyEach) + ' × ' + plural(l.weeks, 'week') + ' = ' + money(l.weekly) + '</span></td><td class="amt">' + money(l.subtotal) + '</td></tr>').join('') +
+      '<tr class="sub"><td>Subtotal<span class="calc">' + plural(q.bikes, 'bike') + ' in ' + Campaigns.word(q.campaigns.length) + '</span></td><td class="amt">' + money(q.subtotal) + '</td></tr>' +
+      tailRows(q) + '</tbody></table>';
+  }
+  function renderPriceMulti(root) {
+    if (!Campaigns.check(effCampaigns(), multiOpts()).ok) return go('dates');
+    const q = quote();
+    const promoBox = '<form class="promo" id="promo" novalidate><label>Promo code (optional)<span class="promo-row"><input class="input" name="code" autocomplete="off" value="' + esc(wiz.promo ? wiz.promo.code || '' : '') + '"><button class="btn" type="submit">' + (wiz.promo ? 'Change' : 'Apply') + '</button></span></label><p class="small" id="promo-msg" role="status">' + (wiz.promo ? '✓ ' + esc(wiz.promo.label || 'Promo code') + ': ' + (+wiz.promo.pct) + '% off' : '') + '</p></form>';
+    root.innerHTML = '<section class="page narrow"><div class="page-head"><button class="back" id="back">‹ Dates & bikes</button><h1>Your price</h1></div>' + steps4(3) +
+      '<div class="card"><div class="sel-sum"><strong>' + esc(wiz.biz ? wiz.biz.company : '') + '</strong>' + (areaName() ? '<span>' + esc(areaName()) + '</span>' : '') +
+      '<span>' + q.bikes + ' bikes in ' + Campaigns.word(q.campaigns.length) + ' · ' + esc(fmtRange(q.start, q.end)) + '</span><span class="campaign-line">' + esc(Campaigns.summary(q.campaigns)) + '</span></div>' +
+      '<div id="ptab">' + priceTableMulti(q) + '</div>' + promoBox + sampleNote() +
+      '<div class="flow-actions"><button type="button" class="btn ghost" id="back2">‹ Back</button><button type="button" class="btn primary big" id="next">' + (REQ() ? 'Send request ›' : 'Next: payment ›') + '</button></div></div></section>';
+    $('#back', root).addEventListener('click', () => go('dates'));
+    $('#back2', root).addEventListener('click', () => go('dates'));
+    $('#next', root).addEventListener('click', () => (REQ() ? sendRequest(me) : go('pay')));
+    wirePromo(root);
   }
   const sampleNote = () => Data.settings().pricesAreSamples ? '<div class="sample-note" role="note"><span aria-hidden="true">ℹ️</span><span><strong>Sample prices.</strong> The real printing, setup and weekly prices will be set by Media on Wheels.</span></div>' : '';
 
   /* ---- step 3: price summary ---- */
   function renderPrice(root) {
     if (!wiz.start || !wiz.end) return go('dates');
+    if (MULTI()) return renderPriceMulti(root);
     const free = freeFor();
     if (wiz.specific) wiz.count = wiz.bikeIds.length;
     if (wiz.count < MIN_BIKES() || free.length < MIN_BIKES()) return go('dates'); /* minimum 5 bikes */
@@ -239,16 +362,7 @@
     $('#back', root).addEventListener('click', () => go('dates'));
     $('#back2', root).addEventListener('click', () => go('dates'));
     $('#next', root).addEventListener('click', () => (REQ() ? sendRequest(me) : go('pay')));
-    $('#promo', root).addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const code = e.target.code.value.trim(), msg = $('#promo-msg', root);
-      if (!code) { wiz.promo = null; App.render(); return; }
-      msg.textContent = 'Checking…';
-      let rule = null;
-      try { rule = window.Auth && Auth.remote ? await Auth.checkPromo(code) : Data.findPromo(code); } catch (ex) { rule = null; }
-      if (!rule) { wiz.promo = null; msg.textContent = 'That code is not valid.'; $('#ptab', root).innerHTML = priceTable(quote()); return; }
-      wiz.promo = Object.assign({}, rule, { code: rule.code || code }); App.render();
-    });
+    wirePromo(root);
   }
 
   /* ---- step 4: card payment (DEMO: nothing is charged, the card number is never stored) ---- */
@@ -289,6 +403,7 @@
           Data.put('transactions', { date: Data.today(), description: (pay.brand || 'Payment') + ' (demo) - deposit - ' + b.company, amount: b.deposit, category: 'Booking deposit', bookingId: b.id, reconciled: false, createdAt: now });
         return Data.get('bookings', b.id);
       }
+      if (MULTI()) return placeMulti(user, pay, action, paid, note); /* several campaigns: js/campaigns.js */
       // pick the bikes: the ones chosen, else free bikes in the chosen area first
       const free = Data.freeBikes(wiz.start, wiz.end);
       let ids;
@@ -320,6 +435,25 @@
       return rec;
   }
 
+  /* Nov 8 2026 7 PM: one order with several campaigns. Each campaign gets its own bikes for its own days. */
+  function placeMulti(user, pay, action, paid, note) {
+    const eff = effCampaigns(), chk = Campaigns.check(eff, multiOpts());
+    if (!chk.ok) { toast(chk.errors[0]); go('dates'); return null; }
+    const as = Campaigns.assign(eff, { area: wiz.area });
+    if (!as.ok) { toast('Some bikes were just booked. Please check the numbers.'); go('dates'); return null; }
+    const rows = eff.map((c, i) => ({ id: c.id, name: c.name, bikes: c.bikes, start: c.start, end: c.end, own: !!c.own, adText: String(c.adText || '').trim(), bikeIds: as.ids[i] }));
+    const t = Campaigns.totals(rows, quoteOpts());
+    const b = wiz.biz || {}, now = new Date().toISOString();
+    return Data.put('bookings', Object.assign({
+      clientId: user.id, clientName: b.contact || user.name, company: b.company || user.company || user.name,
+      contactPhone: b.phone || '', contactEmail: b.email || '', adText: b.adText || '',
+      areaId: wiz.area || '', areaName: areaName(), areaNote: wiz.areaNote || '', mode: 'campaigns',
+      promoCode: wiz.promo ? wiz.promo.code || '' : '', depositPaid: !!paid, balancePaid: false,
+      payment: Object.assign({ amount: t.q.deposit, at: now }, pay), status: 'pending', notes: note || '', createdAt: now,
+      history: [{ at: now, by: b.contact || user.name, action: action.replace('{amount}', money(t.q.deposit) + ' deposit') + ' · ' + rows.length + ' campaigns: ' + Campaigns.summary(rows) }]
+    }, t.patch));
+  }
+
   /* Request first (default): the booking is saved as "Requested" with nothing paid; the deposit is paid after approval. */
   async function sendRequest(user) {
     const rec = placeBooking(user, { method: 'request' }, 'Request sent (nothing paid yet; deposit after approval)', false, '');
@@ -329,7 +463,7 @@
     const b = Data.get('bookings', rec.id);
     if (window.Mailer) { Mailer.send('requested', b); Mailer.send('newRequest', b); }
     go('done');
-    const text = window.SiteSettings ? SiteSettings.text('msgRequestPopup').replace(/\{bikes\}/g, b.bikeIds.length).replace(/\{dates\}/g, fmtRange(b.start, b.end)) : 'You requested ' + b.bikeIds.length + ' bikes.';
+    const text = window.Campaigns && Campaigns.isMulti(b) ? Campaigns.popupText(b) : window.SiteSettings ? SiteSettings.text('msgRequestPopup').replace(/\{bikes\}/g, b.bikeIds.length).replace(/\{dates\}/g, fmtRange(b.start, b.end)) : 'You requested ' + b.bikeIds.length + ' bikes.';
     const m = UI.modal('Request sent', '<div class="req-pop center"><div class="done-mark" aria-hidden="true">✓</div><p class="lead" id="req-pop-text">' + esc(text) + '</p><div class="row-center"><button class="btn primary" data-close>OK</button></div></div>', { noFocus: true });
     m.parentNode.classList.add('req-pop-wrap');
   }
@@ -432,7 +566,8 @@
         '<dt>Business</dt><dd>' + esc(b.company) + '</dd>' + (b.areaName || b.areaNote ? '<dt>Area</dt><dd>' + esc(b.areaName || '') + (b.areaNote ? ' · ' + esc(b.areaNote) : '') + '</dd>' : '') +
         (b.adText ? '<dt>Campaign</dt><dd class="campaign-text">' + esc(b.adText) + '</dd>' : '') +
         '<dt>Dates</dt><dd>' + esc(fmtRange(b.start, b.end)) + (J ? '<br><span class="he" lang="he">' + esc(J.day(b.start).heFull) + ' – ' + esc(J.day(b.end).heFull) + '</span>' : '') + '</dd>' +
-        '<dt>Bikes</dt><dd>' + b.bikeIds.length + '</dd>' + /* Nov 8 2026 (client): count only, no bike numbers (admin still sees them) */
+        '<dt>Bikes</dt><dd>' + b.bikeIds.length + '</dd>' +
+        (window.Campaigns && Campaigns.isMulti(b) ? '<dt>Campaigns</dt><dd>' + Campaigns.listHtml(b, { money }) + '</dd>' : '') + /* Nov 8 2026 (client): count only, no bike numbers (admin still sees them) */
         '<dt>Printing & setup</dt><dd>' + money(b.setupTotal) + '</dd><dt>Weekly (' + b.weeks + ' wk)</dt><dd>' + money(b.weeklyTotal) + '</dd>' +
         (b.discount ? '<dt>Discount</dt><dd>−' + money(b.discount) + '</dd>' : '') + '<dt>Total</dt><dd>' + money(b.total) + '</dd>' +
         '<dt class="hl">' + (b.depositPaid ? 'Deposit paid' : isReq ? 'Deposit after approval' : 'Deposit to pay') + (b.depositPct != null ? ' (' + b.depositPct + '%)' : '') + '</dt><dd class="hl">' + money(b.deposit != null ? b.deposit : b.total) + '</dd>' +
@@ -457,7 +592,8 @@
     const mine = Data.list('bookings').filter((b) => b.clientId === user.id).sort((a, b) => b.start.localeCompare(a.start));
     root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>My bookings</h1><a class="btn primary" href="#/client/book" id="newbk">+ New</a></div>' +
       (mine.length ? mine.map((b) => '<article class="card my-bk"><div class="bk-title"><strong>' + fmtRange(b.start, b.end) + '</strong> ' + (b.requestOnly && statusOf(b) === 'pending' ? '<span class="badge st-pending">Requested</span>' : badge(b)) + '</div>' +
-        '<div class="small">' + b.bikeIds.length + ' bike' + (b.bikeIds.length === 1 ? '' : 's') + (b.areaName ? ' · ' + esc(b.areaName) : '') + '</div>' +
+        '<div class="small">' + b.bikeIds.length + ' bike' + (b.bikeIds.length === 1 ? '' : 's') + (window.Campaigns && Campaigns.isMulti(b) ? ' in ' + Campaigns.word(Campaigns.active(b).length) : '') + (b.areaName ? ' · ' + esc(b.areaName) : '') + '</div>' +
+        (window.Campaigns && Campaigns.isMulti(b) ? Campaigns.listHtml(b, { money }) : '') +
         (b.adText ? '<div class="small campaign-text">Campaign: ' + esc(b.adText) + '</div>' : '') +
         (b.setupTotal != null ? '<div class="small muted">Printing & setup ' + money(b.setupTotal) + ' · weekly ' + money(b.weeklyTotal) + '</div>' : '') +
         '<div class="small muted">' + payLine(b) + '</div>' +

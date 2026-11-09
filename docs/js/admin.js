@@ -4,6 +4,7 @@
   const { esc, money, fmtDate, fmtRange, ago, $, $$, toast, modal, closeModal, confirmBox, statusOf, badge, calendarHtml } = UI;
 
   let mapCtl = null;
+  const MC = (b) => !!(b && window.Campaigns && Campaigns.isMulti(b)); /* Nov 8 2026 7 PM: an order with several campaigns */
   const view = { mapLoc: localStorage.getItem('bikeads.admin.mapLoc') || 'loc_wburg', bkMode: 'calendar', bkFilter: 'all', bkSearch: '', calY: null, calM: null, txSearch: '', txCat: '', txState: 'all' };
 
   function teardown() { if (mapCtl) { mapCtl.destroy(); mapCtl = null; } }
@@ -149,14 +150,15 @@
   function bookingRow(b) {
     const s = statusOf(b);
     return '<div class="bk-row"><div class="bk-main"><div class="bk-title"><strong>' + esc(b.company) + '</strong> ' + (b.requestOnly && s === 'pending' ? '<span class="badge st-pending">Requested</span>' : badge(b)) + (b.requestOnly && b.status === 'approved' && !b.depositPaid ? ' <span class="badge st-pending">Deposit not paid yet</span>' : '') + '</div>' +
-      '<div class="small">' + fmtRange(b.start, b.end) + ' · ' + Data.days(b.start, b.end) + ' days · ' + b.bikeIds.length + ' bikes (' + b.bikeIds.map(Data.bikeLabel).join(', ') + ')' + (b.mode === 'count' ? ' · client asked for ' + b.bikeIds.length + ' bikes' : b.mode !== 'specific' ? ' · asked for any ' + b.mode.replace('any', '') : '') + '</div>' +
+      '<div class="small">' + fmtRange(b.start, b.end) + ' · ' + Data.days(b.start, b.end) + ' days · ' + b.bikeIds.length + ' bikes' + (MC(b) ? ' in ' + Campaigns.word(Campaigns.active(b).length) : ' (' + b.bikeIds.map(Data.bikeLabel).join(', ') + ')') + (MC(b) ? '' : b.mode === 'count' ? ' · client asked for ' + b.bikeIds.length + ' bikes' : b.mode !== 'specific' ? ' · asked for any ' + b.mode.replace('any', '') : '') + '</div>' +
       (b.balance != null ? '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + (b.discount ? ' (discount −' + money(b.discount) + ')' : '') +
         ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' <b>paid</b>' : b.payment && b.payment.method === 'zelle' ? ' · Zelle, note ' + esc(b.payment.ref || '') + ' · <b class="zelle-wait">awaiting Zelle confirmation</b>' : ' due') +
         ' · balance ' + money(b.balance) + (b.balancePaid ? ' <b>paid</b>' : ' <b class="zelle-wait">due</b>') + '</div>' :
       '<div class="small muted">' + esc(b.clientName) + ' · total ' + money(b.total) + (b.payment && b.payment.method === 'zelle' ? ' · Zelle, note ' + esc(b.payment.ref || '') + (b.depositPaid ? ' · <b>paid</b>' : ' · <b class="zelle-wait">awaiting Zelle confirmation</b>') : b.payment && b.payment.last4 ? ' · paid in full by ' + esc(b.payment.brand) + ' •••• ' + esc(b.payment.last4) + ' (demo)' : b.payment && b.payment.brand ? ' · paid in full with ' + esc(b.payment.brand) + ' (demo)' : ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid (demo)' : ' not paid')) + '</div>') +
       (b.setupTotal != null ? '<div class="small muted">Printing &amp; setup ' + money(b.setupTotal) + ' · weekly ' + money(b.weeklyTotal) + ' (' + b.weeks + ' wk)' + (b.areaName ? ' · area: ' + esc(b.areaName) : '') + (b.areaNote ? ' (' + esc(b.areaNote) + ')' : '') + (b.contactPhone ? ' · ' + esc(b.contactPhone) : '') + (b.contactEmail ? ' · ' + esc(b.contactEmail) : '') + '</div>' : '') +
-      (b.adText ? '<div class="small campaign-text">Campaign: ' + esc(b.adText) + '</div>' : '') + '</div>' +
-      '<div class="bk-actions">' + (b.payment && b.payment.method === 'zelle' && !b.depositPaid ? '<button class="btn ok" data-zelle-paid="' + b.id + '">Mark Zelle paid</button>' : '') +
+      (b.adText ? '<div class="small campaign-text">Campaign: ' + esc(b.adText) + '</div>' : '') +
+      (MC(b) ? Campaigns.listHtml(b, { bikes: true, money }) : '') + '</div>' + /* Nov 8 2026 7 PM: an agency order with several campaigns */
+      '<div class="bk-actions">' + (MC(b) ? '<button class="btn ghost" data-camps="' + b.id + '">Campaigns &amp; bikes</button>' : '') + (b.payment && b.payment.method === 'zelle' && !b.depositPaid ? '<button class="btn ok" data-zelle-paid="' + b.id + '">Mark Zelle paid</button>' : '') +
       (b.balance > 0 && b.depositPaid && !b.balancePaid && (s === 'approved' || s === 'active' || s === 'completed' || b.status === 'approved') ? '<button class="btn ok" data-balance-paid="' + b.id + '">Mark balance paid</button>' : '') + (s === 'pending' ? '<button class="btn ok" data-approve="' + b.id + '">✓ Approve</button><button class="btn danger-ghost" data-decline="' + b.id + '">✕ Decline</button>' : '') +
       (b.status !== 'declined' && b.status !== 'cancelled' ? '<a class="btn ghost" href="#/admin/invoice/' + esc(b.id) + '" data-invoice="' + b.id + '">Invoice</a>' : '') +
       '<button class="btn ghost" data-open="' + b.id + '">Edit</button></div>' +
@@ -189,7 +191,7 @@
       if (f !== 'all') return s === f;
       return true;
     });
-    if (view.bkSearch) { const q = view.bkSearch.toLowerCase(); list = list.filter((b) => (b.company + ' ' + b.clientName + ' ' + b.bikeIds.map(Data.bikeLabel).join(' ') + ' ' + b.id).toLowerCase().includes(q)); }
+    if (view.bkSearch) { const q = view.bkSearch.toLowerCase(); list = list.filter((b) => (b.company + ' ' + b.clientName + ' ' + b.bikeIds.map(Data.bikeLabel).join(' ') + ' ' + b.id + (MC(b) ? ' ' + b.campaigns.map((c) => c.name).join(' ') : '')).toLowerCase().includes(q)); }
     list.sort((a, b) => b.start.localeCompare(a.start));
     const filters = [['all', 'All'], ['pending', 'Pending'], ['upcoming', 'Upcoming'], ['past', 'Past'], ['declined', 'Declined'], ['cancelled', 'Cancelled']];
     body.innerHTML = '<div class="card"><div class="filters"><div class="seg wrap">' + filters.map(([k, l]) => '<button class="' + (f === k ? 'on' : '') + '" data-bkf="' + k + '">' + l + '</button>').join('') + '</div>' +
@@ -201,6 +203,7 @@
   }
 
   function onBookingClick(e) {
+    const cp = e.target.closest('[data-camps]'); if (cp && window.CampaignsAdmin) { CampaignsAdmin.open(cp.getAttribute('data-camps')); return; }
     const ap = e.target.closest('[data-approve]'); if (ap) { approve(ap.getAttribute('data-approve')); return; }
     const de = e.target.closest('[data-decline]'); if (de) { decline(de.getAttribute('data-decline')); return; }
     const zp = e.target.closest('[data-zelle-paid]'); if (zp) { zellePaid(zp.getAttribute('data-zelle-paid')); return; }
@@ -233,7 +236,7 @@
 
   function approve(id) {
     const b = Data.get('bookings', id);
-    const clash = Data.list('bookings').filter((o) => o.id !== id && o.status === 'approved' && Data.overlaps(b.start, b.end, o.start, o.end) && o.bikeIds.some((x) => b.bikeIds.includes(x)));
+    const clash = Data.clashes(b); /* campaign by campaign: only the days each campaign rides */
     const go = (anote) => {
       Data.put('bookings', { id, status: 'approved', adminNote: anote || '', history: addHistory(b, 'Approved' + (anote ? ' (note: ' + anote + ')' : '')) });
       if (window.Mailer) Mailer.send('approved', Data.get('bookings', id)); /* Nov 8 2026: "Approved" email to the client */
@@ -244,7 +247,7 @@
       }
       toast(note); App.render();
     };
-    const ask = () => noteBox('Approve this request?', b.company + ', ' + fmtRange(b.start, b.end) + ', ' + b.bikeIds.length + ' bikes, ' + money(b.total) + '. The client gets an email and can pay the deposit.', 'Approve', go, false);
+    const ask = () => noteBox(MC(b) ? 'Approve the whole order?' : 'Approve this request?', b.company + ', ' + fmtRange(b.start, b.end) + ', ' + b.bikeIds.length + ' bikes' + (MC(b) ? ' in ' + Campaigns.active(b).length + ' campaigns (' + Campaigns.summary(Campaigns.active(b)) + ')' : '') + ', ' + money(b.total) + '. The client gets an email and can pay the deposit.', 'Approve', go, false);
     if (clash.length) confirmBox('Bikes already booked', 'Some of these bikes are already approved for ' + clash.map((c) => c.company).join(', ') + ' on overlapping days. Approve anyway?', 'Approve anyway', ask);
     else ask();
   }
@@ -256,7 +259,7 @@
   }
   function decline(id) {
     const b = Data.get('bookings', id);
-    noteBox('Decline this request?', b.company + ', ' + fmtRange(b.start, b.end) + ', ' + b.bikeIds.length + ' bikes. The bikes become free again.', 'Decline', (note) => {
+    noteBox(MC(b) ? 'Decline the whole order?' : 'Decline this request?', b.company + ', ' + fmtRange(b.start, b.end) + ', ' + b.bikeIds.length + ' bikes' + (MC(b) ? ' in ' + Campaigns.word(Campaigns.active(b).length) : '') + '. The bikes become free again.', 'Decline', (note) => {
       Data.put('bookings', { id, status: 'declined', adminNote: note || '', history: addHistory(b, 'Declined' + (note ? ' (note: ' + note + ')' : '')) });
       if (window.Mailer) Mailer.send('declined', Data.get('bookings', id)); /* Nov 8 2026: "Declined" email to the client */
       toast('Request declined'); App.render();
@@ -271,8 +274,9 @@
     const m = modal(b ? 'Booking · ' + b.company : 'Add a booking', '<form id="bkform" class="form">' +
       '<label>Client<select class="select" name="clientId"><option value="">— Walk-in / other —</option>' + clients.map((c) => '<option value="' + c.id + '"' + (b && b.clientId === c.id ? ' selected' : '') + '>' + esc(c.company + ' (' + c.name + ')') + '</option>').join('') + '</select></label>' +
       '<label>Company (red flag name)<input class="input" name="company" required value="' + esc(b ? b.company : '') + '"></label>' +
-      '<div class="two"><label>From<input class="input" type="date" name="start" required value="' + st + '"></label><label>Till<input class="input" type="date" name="end" required value="' + en + '"></label></div>' +
-      '<fieldset><legend>Bikes</legend><div class="bike-pick" id="bkpick"></div></fieldset>' +
+      '<div class="two"' + (MC(b) ? ' hidden' : '') + '><label>From<input class="input" type="date" name="start" required value="' + st + '"></label><label>Till<input class="input" type="date" name="end" required value="' + en + '"></label></div>' +
+      (MC(b) ? '<fieldset><legend>Campaigns (' + Campaigns.active(b).length + ')</legend>' + Campaigns.listHtml(b, { bikes: true, money, dates: true }) + '<button type="button" class="btn ghost small-btn" id="bk-camps">Change campaigns &amp; bikes</button></fieldset>' : '') +
+      '<fieldset' + (MC(b) ? ' hidden' : '') + '><legend>Bikes</legend><div class="bike-pick" id="bkpick"></div></fieldset>' +
       '<div class="two"><label>Status<select class="select" name="status">' + ['pending', 'approved', 'declined', 'completed', 'cancelled'].map((s) => '<option value="' + s + '"' + ((b ? b.status : 'approved') === s ? ' selected' : '') + '>' + UI.STATUS_LABEL[s] + '</option>').join('') + '</select></label>' +
       '<label>Price per bike per day (dollars)<input class="input" type="number" step="0.01" min="0" name="pricePerDay" value="' + (b ? b.pricePerDay : Data.settings().pricePerBikeDay) + '"></label></div>' +
       '<div class="two"><label>Total (dollars)<input class="input" type="number" step="0.01" min="0" name="total" value="' + (b ? b.total : 0) + '"></label><label>Deposit (dollars)<input class="input" type="number" step="0.01" min="0" name="deposit" value="' + (b ? b.deposit : 0) + '"></label></div>' +
@@ -300,6 +304,7 @@
       const total = Math.round(chosen.size * days * (+form.pricePerDay.value || 0) * 100) / 100;
       form.total.value = total; form.deposit.value = Math.round(total * Data.settings().depositPct) / 100;
     });
+    const bc = m.querySelector('#bk-camps'); if (bc) bc.addEventListener('click', () => { closeModal(); CampaignsAdmin.open(b.id); });
     if (b) m.querySelector('#delbk').addEventListener('click', () => confirmBox('Delete this booking?', 'This removes it from history too. To keep a record, set the status to Cancelled instead.', 'Delete', () => { Data.remove('bookings', b.id); toast('Booking deleted'); App.render(); }, true));
     form.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -312,6 +317,7 @@
         pricePerDay: +form.pricePerDay.value || 0, total: +form.total.value || 0, deposit: +form.deposit.value || 0,
         depositPaid: form.depositPaid.checked, notes: form.notes.value
       };
+      if (MC(b)) { rec.start = b.start; rec.end = b.end; rec.bikeIds = b.bikeIds; } /* dates and bikes of a campaign order are changed per campaign */
       if (b) { rec.id = b.id; rec.history = addHistory(b, 'Edited by admin' + (b.status !== rec.status ? ' (status → ' + UI.STATUS_LABEL[rec.status] + ')' : '')); }
       else { rec.mode = 'specific'; rec.createdAt = new Date().toISOString(); rec.history = addHistory({}, 'Added by admin'); }
       Data.put('bookings', rec); closeModal(); toast('Booking saved'); App.render();
@@ -434,8 +440,8 @@
   function bookingsCsv() {
     const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const rows = Data.list('bookings').sort((a, b) => (a.start < b.start ? -1 : 1));
-    const lines = [['Booking', 'Company', 'Client', 'Email', 'Phone', 'Start', 'End', 'Bikes', 'Status', 'Total (dollars)', 'Deposit (dollars)', 'Campaign', 'Created'].map(q).join(',')]
-      .concat(rows.map((b) => [b.id, b.company, b.clientName, b.email, b.phone, b.start, b.end, (b.bikeIds || []).length, UI.STATUS_LABEL[statusOf(b)] || b.status, b.total, b.deposit, b.adText, b.createdAt].map(q).join(',')));
+    const lines = [['Booking', 'Company', 'Client', 'Email', 'Phone', 'Start', 'End', 'Bikes', 'Status', 'Total (dollars)', 'Deposit (dollars)', 'Campaign', 'Created', 'Campaigns'].map(q).join(',')]
+      .concat(rows.map((b) => [b.id, b.company, b.clientName, b.email, b.phone, b.start, b.end, (b.bikeIds || []).length, UI.STATUS_LABEL[statusOf(b)] || b.status, b.total, b.deposit, b.adText, b.createdAt, MC(b) ? Campaigns.summary(Campaigns.active(b)) : ''].map(q).join(',')));
     const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'media-on-wheels-bookings-' + Data.today() + '.csv';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);

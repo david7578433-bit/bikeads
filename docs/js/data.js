@@ -143,9 +143,24 @@
       const busy = new Set();
       state.bookings.forEach((b) => {
         if (b.id === exceptBookingId || !Data.holdsBikes(b)) return;
-        if (Data.overlaps(start, end, b.start, b.end)) b.bikeIds.forEach((id) => busy.add(id));
+        Data.holdParts(b).forEach((p) => { if (Data.overlaps(start, end, p.start, p.end)) p.bikeIds.forEach((id) => busy.add(id)); });
       });
       return busy;
+    },
+    /* Nov 8 2026 7 PM (David: a marketing company, e.g. "Pivot", sends ONE request with several campaigns — GB 5 bikes,
+     * GG 5, Lakefront 5). A booking with b.campaigns holds each campaign's bikes only on that campaign's own days;
+     * a declined campaign holds nothing. A booking without campaigns holds b.bikeIds from b.start to b.end, as before. */
+    holdParts(b) {
+      if (b && Array.isArray(b.campaigns) && b.campaigns.length) {
+        return b.campaigns.filter((c) => c && c.status !== 'declined').map((c) => ({ start: c.start || b.start, end: c.end || b.end, bikeIds: c.bikeIds || [], campaign: c }));
+      }
+      return [{ start: b.start, end: b.end, bikeIds: b.bikeIds || [] }];
+    },
+    /* Other APPROVED bookings that use one of this booking's bikes on an overlapping day (campaign by campaign). */
+    clashes(b) {
+      const mine = Data.holdParts(b);
+      return state.bookings.filter((o) => o.id !== b.id && o.status === 'approved' && Data.holdParts(o).some((p) =>
+        mine.some((q) => Data.overlaps(q.start, q.end, p.start, p.end) && q.bikeIds.some((x) => p.bikeIds.includes(x)))));
     },
     freeBikes(start, end, exceptBookingId) {
       const busy = Data.busyBikeIds(start, end, exceptBookingId);
@@ -173,6 +188,32 @@
       const setupEach = +s.setupFeePerBike || 0, weeklyEach = +s.weeklyPerBike || 0;
       const r2 = (x) => Math.round(x * 100) / 100;
       const setup = r2(n * setupEach), weekly = r2(n * weeklyEach * weeks), subtotal = r2(setup + weekly);
+      return Data.withDiscounts({ bikes: n, days, weeks, setupEach, weeklyEach, setup, weeklyPerWeek: r2(n * weeklyEach), weekly, subtotal }, weeks, opts);
+    },
+    /* Nov 8 2026 7 PM: one order with several campaigns (each its own name, bikes and dates). Each campaign is priced
+     * like a booking of its own (printing & setup per bike + weekly per bike × its weeks); discounts work on the whole
+     * order: "N+ bikes" counts all bikes together, "N+ weeks" needs every campaign to be that long. */
+    priceQuoteMulti(list, opts) {
+      const s = state.settings, r2 = (x) => Math.round(x * 100) / 100;
+      const setupEach = +s.setupFeePerBike || 0, weeklyEach = +s.weeklyPerBike || 0;
+      const lines = (list || []).map((c) => {
+        const n = Math.max(0, c.bikes | 0), days = Data.days(c.start, c.end), weeks = Data.weeks(c.start, c.end);
+        const setup = r2(n * setupEach), weekly = r2(n * weeklyEach * weeks);
+        return { id: c.id, name: c.name, bikes: n, start: c.start, end: c.end, days, weeks, setup, weekly, subtotal: r2(setup + weekly) };
+      });
+      const sum = (k) => r2(lines.reduce((a, x) => a + x[k], 0));
+      const n = lines.reduce((a, x) => a + x.bikes, 0);
+      const starts = lines.map((x) => x.start).sort(), ends = lines.map((x) => x.end).sort();
+      const start = starts[0], end = ends[ends.length - 1];
+      const weeks = lines.reduce((a, x) => Math.max(a, x.weeks), 0), ruleWeeks = lines.reduce((a, x) => Math.min(a, x.weeks), Infinity);
+      const q = Data.withDiscounts({ bikes: n, days: start ? Data.days(start, end) : 0, weeks, setupEach, weeklyEach, setup: sum('setup'),
+        weeklyPerWeek: r2(n * weeklyEach), weekly: sum('weekly'), subtotal: sum('subtotal') }, lines.length ? ruleWeeks : 0, opts);
+      return Object.assign(q, { multi: true, campaigns: lines, start, end });
+    },
+    withDiscounts(base, weeks, opts) {
+      opts = opts || {};
+      const s = state.settings, n = base.bikes, subtotal = base.subtotal;
+      const r2 = (x) => Math.round(x * 100) / 100;
       const rules = (state.discounts || []).filter((r) => r && r.active !== false && +r.pct > 0 && !Data.expired(r));
       const best = (list) => list.sort((a, b) => (+b.pct) - (+a.pct))[0] || null;
       const cl = opts.client || {};
@@ -192,8 +233,7 @@
       const total = r2(subtotal - discount);
       const depositPct = Math.max(0, Math.min(100, s.depositPct == null ? 20 : +s.depositPct));
       const deposit = r2(total * depositPct / 100);
-      return { bikes: n, days, weeks, setupEach, weeklyEach, setup, weeklyPerWeek: r2(n * weeklyEach), weekly, subtotal, discounts, discount, total,
-        depositPct, deposit, balance: r2(total - deposit), samples: !!s.pricesAreSamples };
+      return Object.assign({}, base, { discounts, discount, total, depositPct, deposit, balance: r2(total - deposit), samples: !!s.pricesAreSamples });
     },
     /* Nov 8 2026 (admin menu): a discount / promo code with an end date stops working after that day. */
     expired(r) { return !!(r && r.expires && String(r.expires) < Data.today()); },

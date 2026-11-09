@@ -14,7 +14,7 @@
   /* Only fonts that are free (SIL Open Font License) and already saved in docs/fonts, plus the phone's own font. */
   const FONTS_BODY = [['Plus Jakarta Sans', 'Plus Jakarta Sans (OFL)'], ['Heebo', 'Heebo (OFL)'], ['system', "The phone's own font"]];
   const FONTS_HEAD = [['DM Serif Display', 'DM Serif Display (OFL)'], ['Plus Jakarta Sans', 'Plus Jakarta Sans (OFL)'], ['Heebo', 'Heebo (OFL)']];
-  const FIELDS4 = [['company', 'Business / company name (shown on the ads)', 'e.g. Fresh Basket Grocery', true],
+  const FIELDS4 = [['company', 'Business / company name (shown on the ads)', 'e.g. Fresh Basket Grocery, or an agency like Pivot Marketing', true],
     ['email', 'Email address', '', true], ['phone', 'Phone number', '(845) 555-0123', true],
     ['campaign', 'Campaign description', "What's the campaign about? (optional)", false]];
 
@@ -74,7 +74,10 @@
       f('themeMode', 'Light or dark', 'select', 'light', { options: [['light', 'Light'], ['dark', 'Dark']], live: true })
     ] },
     { key: 'form', title: 'Booking form', icon: 'form', intro: 'Step 1 of booking. Turn each box on or off, make it required, change its words.', fields: [
-      f('requestFirst', 'Clients send a REQUEST first and pay the deposit only after you approve', 'toggle', true, { live: true, help: 'Off = the old way: the client pays the deposit right away and the booking waits for approval.' })].concat(
+      f('requestFirst', 'Clients send a REQUEST first and pay the deposit only after you approve', 'toggle', true, { live: true, help: 'Off = the old way: the client pays the deposit right away and the booking waits for approval.' }),
+      /* Nov 8 2026 7 PM (David): a marketing company (e.g. Pivot) sends ONE request with several campaigns (GB 5, GG 5, Lakefront 5) */
+      f('multiCampaign', 'Allow multiple campaigns per request ("+ Add another campaign")', 'toggle', true, { live: true, help: 'For agencies with several brands: one request, each campaign with its own name, bikes, dates and description.' }),
+      f('minBikesApplies', 'Minimum bikes applies to', 'select', 'order', { options: [['order', 'The whole order (all campaigns together)'], ['campaign', 'Each campaign']], live: true, help: 'The minimum itself is under Pricing.' })].concat(
       FIELDS4.reduce((a, [id, label, ph, req]) => a.concat([
         f('formFields.' + id + '.show', label + ': show', 'toggle', true, { live: true, group: label }),
         f('formFields.' + id + '.required', label + ': required', 'toggle', req, { live: true, group: label }),
@@ -83,6 +86,7 @@
       ]), [])) },
     { key: 'messages', title: 'Messages', icon: 'chat', intro: 'Texts people see on the site. Nothing is sent by email or SMS. {business} = the business name.', fields: [
       f('msgRequestPopup', 'Pop-up after a request ({bikes}, {dates})', 'text', 'You requested {bikes} bikes for {dates}. We will review it and confirm soon.', { live: true }),
+      f('msgRequestPopupMulti', 'Pop-up after a request with several campaigns ({bikes}, {count}, {campaigns}, {dates})', 'text', 'You requested {bikes} bikes in {count} campaigns ({campaigns}) for {dates}. We will review it and confirm soon.', { live: true }),
       f('msgRequestTitle', 'Request sent: title', 'text', 'Request sent', { live: true }),
       f('msgRequest', 'Request sent: message', 'textarea', 'Thank you! This is a request, not a booking yet. {business} will review it and confirm. You pay the deposit after it is approved.', { live: true }),
       f('msgDoneTitle', 'Booking done: title', 'text', 'Booking confirmed', { live: true }),
