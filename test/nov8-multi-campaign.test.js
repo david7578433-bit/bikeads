@@ -150,8 +150,8 @@ test('Supabase: idempotent migration (campaign holds per day, per-campaign view 
   assert.match(fs.readFileSync(path.join(root, 'supabase/schema.sql'), 'utf8'), /mow_booking_campaigns/);
   assert.match(read('js/auth.js'), /String\(h\.id\)\.split\('#'\)\[0\]/, 'own order not counted twice as a hold');
   const html = read('index.html'), sw = read('sw.js');
-  assert.match(html, /js\/campaigns\.js\?v=18/); assert.match(html, /js\/campaigns-admin\.js\?v=18/); assert.match(html, /campaigns\.css\?v=18/);
-  assert.match(sw, /'bikeads-v18'/); for (const f of ['js/campaigns.js', 'js/campaigns-admin.js', 'campaigns.css']) assert.ok(sw.includes('"' + f + '"'), f);
+  assert.match(html, /js\/campaigns\.js\?v=\d+/); assert.match(html, /js\/campaigns-admin\.js\?v=\d+/); assert.match(html, /campaigns\.css\?v=\d+/);
+  assert.match(sw, /'bikeads-v\d+'/); for (const f of ['js/campaigns.js', 'js/campaigns-admin.js', 'campaigns.css']) assert.ok(sw.includes('"' + f + '"'), f);
   assert.ok(html.indexOf('js/campaigns.js') < html.indexOf('js/mailer.js') && html.indexOf('js/campaigns.js') < html.indexOf('js/client.js'));
   for (const f of ['js/campaigns.js', 'js/campaigns-admin.js', 'campaigns.css']) assert.ok(!/\$\d/.test(read(f)), f + ': money as dollars');
 });

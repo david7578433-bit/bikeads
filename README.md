@@ -122,3 +122,22 @@ Admin: the booking shows its campaigns and bikes, "Campaigns & bikes" changes bi
 (before approval); Approve / Decline is for the whole order; the invoice lists each campaign; Clients are grouped by company.
 Code: `docs/js/campaigns.js`, `docs/js/campaigns-admin.js`, `docs/campaigns.css`. Database: campaigns live in the booking's
 JSON (`data->'campaigns'`); `supabase/migrations/20261109_multi_campaign.sql` (bike holds per campaign, view `mow_booking_campaigns`).
+
+## Company promo codes and referrals (Nov 8 2026, 7 PM)
+David: "this organization get a discount, so we give this organization a promo code" and "Also, maybe add the option of referrals".
+- **Promo codes** (Admin → Pricing → Discounts and promo codes, or Admin → Clients → **Give promo code** on a client): percent
+  OR dollars off; the whole order (default) or only some campaigns (by name); only for one company (that client account, or
+  the same company name; empty = anyone); end date; usage limit. Example: PIVOT10, 10% off, only Pivot Marketing — another
+  company sees "This code is for another company." Old codes work as before. The discount line shows on the price step,
+  the pop-up, My bookings and the invoice (Subtotal, then each discount).
+- **Referrals** (js/referrals.js; Admin → **Referrals**): every client has a code + share link (My account → "Refer a
+  business", Copy link only). A new client who signs up with the link (or types the code in the promo box) gets the
+  new-client discount on the first order; when that order is approved (or its deposit paid — setting), the referrer's
+  reward is taken off their next order by itself (one reward per order). Defaults: on, 10% and 10% (percent or dollars).
+  Self-referral (same account, email, company name or phone) and clients who already ordered are refused. Admin: list of
+  all referrals, Change (status, amounts, give a reward back, note), Delete, + Add by hand.
+- Database: supabase/migrations/20261109_promo_referrals.sql (also at the end of schema.sql): mow_discounts gets
+  amount_type, amount_off, applies_to, campaign_names, company_id, company, max_uses; mow_promo_check(code);
+  mow_profiles.referral_code; table mow_referrals (RLS: a client sees only rows where they are the referrer or the new
+  client; only the admin writes); mow_claim_referral(code), mow_referral_mark(booking id); triggers that claim a code from
+  the sign-up and move statuses when orders are approved / declined / cancelled. Local test: supabase/tests/.

@@ -486,7 +486,7 @@
     const s = Data.settings();
     const rules = Data.list('discounts').sort((a, b) => DKINDS.findIndex((k) => k[0] === a.kind) - DKINDS.findIndex((k) => k[0] === b.kind) || (+a.min || 0) - (+b.min || 0));
     const clients = Data.list('users').filter((u) => u.role === 'client');
-    const cond = (r) => r.kind === 'bikes' ? (+r.min) + '+ bikes' : r.kind === 'weeks' ? (+r.min) + '+ weeks' : r.kind === 'promo' ? 'code ' + esc(r.code || '') : esc(r.clientEmail || (Data.get('users', r.clientId) || {}).email || '');
+    const cond = (r) => r.kind === 'bikes' ? (+r.min) + '+ bikes' : r.kind === 'weeks' ? (+r.min) + '+ weeks' : r.kind === 'promo' ? 'code <b>' + esc(r.code || '') + '</b>' + promoMore(r) : esc(r.clientEmail || (Data.get('users', r.clientId) || {}).email || '');
     const ex = s.setupFeePerBike != null ? Data.priceQuote(10, Data.today(), Data.addDays(Data.today(), 27)) : null;
     host.innerHTML = '<h2>Price table &amp; discounts</h2>' +
       '<table class="price-table admin-prices"><tbody><tr><td>Printing &amp; setup, per bike (one time)</td><td class="amt">' + money(s.setupFeePerBike) + '</td></tr>' +
@@ -496,42 +496,71 @@
       '<p class="small muted">Change these prices in the boxes above. Discounts below are taken off the subtotal on the client\'s price page. For each type the biggest matching discount counts; different types add up (at most 90% off).</p>' +
       (rules.length ? '<ul class="disc-list">' + rules.map((r) =>
         '<li class="disc-item' + (r.active === false ? ' off' : '') + '"><div><strong>' + esc(r.label || (DKINDS.find((k) => k[0] === r.kind) || [0, r.kind])[1]) + '</strong>' +
-        '<span class="small muted">' + cond(r) + ' · <b>' + (+r.pct) + '% off</b>' + (r.active === false ? ' · off' : '') + (r.expires ? (Data.expired(r) ? ' · <b>expired ' + esc(UI.fmtDate(r.expires)) + '</b>' : ' · ends ' + esc(UI.fmtDate(r.expires))) : '') + '</span></div>' +
+        '<span class="small muted">' + cond(r) + ' · <b>' + (Data.isFixed(r) ? esc(money(r.amount)) : (+r.pct) + '%') + ' off</b>' + (r.active === false ? ' · off' : '') + (r.expires ? (Data.expired(r) ? ' · <b>expired ' + esc(UI.fmtDate(r.expires)) + '</b>' : ' · ends ' + esc(UI.fmtDate(r.expires))) : '') + '</span></div>' +
         '<div class="disc-actions"><button class="btn ghost small-btn" data-dedit="' + r.id + '">Edit</button>' + (r.active !== false && !Data.expired(r) ? '<button class="btn ghost small-btn" data-dexp="' + r.id + '">Expire now</button>' : '') + '<button class="btn danger-ghost small-btn" data-ddel="' + r.id + '">Delete</button></div></li>').join('') + '</ul>' : '<p class="muted">No discounts yet.</p>') +
       (ex ? '<p class="small muted">Example: 10 bikes for 4 weeks = ' + money(ex.subtotal) + (ex.discount ? ' − ' + money(ex.discount) + ' discount = ' + money(ex.total) : '') + ', deposit now ' + money(ex.deposit) + '.</p>' : '') +
       '<div class="row-end"><button class="btn" id="dadd">+ Add discount</button></div>';
-    const edit = (id) => {
-      const r = id ? Data.get('discounts', id) : { kind: 'bikes', min: 10, pct: 10, active: true };
-      const m = UI.modal(id ? 'Edit discount' : 'New discount', '<form class="form" id="df">' +
-        '<label>Type<select class="input" name="kind">' + DKINDS.map(([k, l]) => '<option value="' + k + '"' + (r.kind === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
-        '<label data-for="bikes weeks">From how many (bikes / weeks)<input class="input" type="number" min="1" step="1" name="min" value="' + (+r.min || 1) + '"></label>' +
-        '<label data-for="promo">Promo code<input class="input" name="code" autocomplete="off" value="' + esc(r.code || '') + '"></label>' +
-        '<label data-for="client">Client<select class="input" name="clientId"><option value="">Pick a client…</option>' + clients.map((u) => '<option value="' + esc(u.id) + '"' + (r.clientId === u.id ? ' selected' : '') + '>' + esc((u.company || u.name) + ' · ' + u.email) + '</option>').join('') + '</select></label>' +
-        '<label data-for="client">…or client email<input class="input" type="email" name="clientEmail" value="' + esc(r.clientEmail || '') + '"></label>' +
-        '<label>Percent off<input class="input" type="number" min="1" max="90" step="0.5" name="pct" value="' + (+r.pct || 10) + '" required></label>' +
-        '<label>Name shown to the client (optional)<input class="input" name="label" value="' + esc(r.label || '') + '" placeholder="e.g. Big campaign discount"></label>' +
-        '<label>Ends on (optional; empty = no end)<input class="input" type="date" name="expires" value="' + esc(r.expires || '') + '"></label>' +
-        '<label class="check"><input type="checkbox" name="active"' + (r.active === false ? '' : ' checked') + '> On</label>' +
-        '<p class="err" id="derr" role="alert"></p><div class="row-end"><button class="btn primary">Save discount</button></div></form>');
-      const f = m.querySelector('#df');
-      const show = () => m.querySelectorAll('[data-for]').forEach((l) => { l.style.display = l.getAttribute('data-for').split(' ').includes(f.kind.value) ? '' : 'none'; });
-      f.kind.addEventListener('change', show); show();
-      f.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const kind = f.kind.value, pct = +f.pct.value;
-        if (!(pct > 0 && pct <= 90)) { m.querySelector('#derr').textContent = 'Percent off must be between 1 and 90.'; return; }
-        const rec = { id: id || undefined, kind, pct, label: f.label.value.trim(), active: f.active.checked, min: null, code: '', clientId: '', clientEmail: '', expires: f.expires.value || '' };
-        if (kind === 'bikes' || kind === 'weeks') rec.min = Math.max(1, Math.round(+f.min.value || 1));
-        if (kind === 'promo') { rec.code = f.code.value.trim().toUpperCase(); if (!rec.code) { m.querySelector('#derr').textContent = 'Type the promo code.'; return; }
-          if (Data.list('discounts').some((x) => x.kind === 'promo' && x.id !== id && String(x.code).toUpperCase() === rec.code)) { m.querySelector('#derr').textContent = 'That code already exists.'; return; } }
-        if (kind === 'client') { rec.clientId = f.clientId.value; const u = Data.get('users', rec.clientId); rec.clientEmail = (f.clientEmail.value.trim() || (u && u.email) || '').toLowerCase(); if (!rec.clientId && !rec.clientEmail) { m.querySelector('#derr').textContent = 'Pick a client or type the email.'; return; } }
-        Data.put('discounts', rec); UI.closeModal(); toast('Discount saved'); discountsAdmin(host);
-      });
-    };
+    const edit = (id) => editDiscount(id, null, () => discountsAdmin(host));
     $('#dadd', host).addEventListener('click', () => edit(null));
     $$('[data-dedit]', host).forEach((b) => b.addEventListener('click', () => edit(b.getAttribute('data-dedit'))));
     $$('[data-dexp]', host).forEach((b) => b.addEventListener('click', () => confirmBox('Expire this discount now?', 'It stops working today. Bookings already made keep their price. You can turn it on again with Edit.', 'Expire now', () => { Data.put('discounts', { id: b.getAttribute('data-dexp'), active: false, expires: Data.addDays(Data.today(), -1) }); toast('Discount expired'); discountsAdmin(host); }, true)));
     $$('[data-ddel]', host).forEach((b) => b.addEventListener('click', () => confirmBox('Delete this discount?', 'Bookings already made keep their price.', 'Delete', () => { Data.remove('discounts', b.getAttribute('data-ddel')); toast('Discount deleted'); discountsAdmin(host); }, true)));
+  }
+
+  /* Nov 8 2026 7 PM (David: "this organization get a discount, so we give this organization a promo code"): a promo code
+   * can be percent OR dollars off, for the whole order (default) or only some campaigns, only for one company
+   * (e.g. PIVOT10 for Pivot Marketing; empty = everyone), with an end date and a usage limit. */
+  function promoMore(r) {
+    const co = r.company || ((r.companyId && Data.get('users', r.companyId)) || {}).company || '';
+    const used = Data.promoUses(r.code);
+    return (Data.scoped(r) ? ' · only ' + esc(Data.campaignNames(r).join(', ')) : ' · whole order') + (co || r.companyId ? ' · only for <b>' + esc(co || 'one client') + '</b>' : ' · anyone') +
+      (+r.maxUses > 0 ? ' · used ' + used + ' of ' + (+r.maxUses) : used ? ' · used ' + used + '×' : '');
+  }
+  function editDiscount(id, prefill, after) {
+    const r = id ? Data.get('discounts', id) : Object.assign({ kind: 'bikes', min: 10, pct: 10, active: true }, prefill || {});
+    const clients = Data.list('users').filter((u) => u.role === 'client');
+    const coOpts = '<option value="">Anyone (no company)</option>' + clients.map((u) => '<option value="' + esc(u.id) + '"' + (r.companyId === u.id ? ' selected' : '') + '>' + esc((u.company || u.name) + ' · ' + u.email) + '</option>').join('');
+    const m = modal(id ? 'Edit discount' : prefill && prefill.companyId ? 'Promo code for ' + (prefill.company || 'this client') : 'New discount', '<form class="form" id="df">' +
+      '<label>Type<select class="input" name="kind">' + DKINDS.map(([k, l]) => '<option value="' + k + '"' + (r.kind === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
+      '<label data-for="bikes weeks">From how many (bikes / weeks)<input class="input" type="number" min="1" step="1" name="min" value="' + (+r.min || 1) + '"></label>' +
+      '<label data-for="promo">Promo code<input class="input" name="code" autocomplete="off" value="' + esc(r.code || '') + '"></label>' +
+      '<label data-for="client">Client<select class="input" name="clientId"><option value="">Pick a client…</option>' + clients.map((u) => '<option value="' + esc(u.id) + '"' + (r.clientId === u.id ? ' selected' : '') + '>' + esc((u.company || u.name) + ' · ' + u.email) + '</option>').join('') + '</select></label>' +
+      '<label data-for="client">…or client email<input class="input" type="email" name="clientEmail" value="' + esc(r.clientEmail || '') + '"></label>' +
+      '<label data-for="promo">Discount<select class="input" name="amountType"><option value="pct"' + (r.amountType !== 'fixed' ? ' selected' : '') + '>Percent off</option><option value="fixed"' + (r.amountType === 'fixed' ? ' selected' : '') + '>Dollars off</option></select></label>' +
+      '<label data-for="bikes weeks client promo-pct">Percent off<input class="input" type="number" min="1" max="90" step="0.5" name="pct" value="' + (+r.pct || 10) + '"></label>' +
+      '<label data-for="promo-fixed">Dollars off<input class="input" type="number" min="1" step="1" name="amount" value="' + (+r.amount || 100) + '"></label>' +
+      '<label data-for="promo">Takes off from<select class="input" name="applies"><option value="order"' + (r.applies !== 'campaigns' ? ' selected' : '') + '>The whole order (all campaigns)</option><option value="campaigns"' + (r.applies === 'campaigns' ? ' selected' : '') + '>Only some campaigns</option></select></label>' +
+      '<label data-for="promo-camp">Campaign names (comma between)<input class="input" name="campaignNames" placeholder="e.g. GB, Lakefront" value="' + esc(Data.campaignNames(r).join(', ')) + '"></label>' +
+      '<label data-for="promo">Only for this company (optional)<select class="input" name="companyId">' + coOpts + '</select><span class="small muted">Set = only that client account (or the same company name) can use the code.</span></label>' +
+      '<label data-for="promo">How many times it can be used (optional; empty = no limit)<input class="input" type="number" min="1" step="1" name="maxUses" value="' + (+r.maxUses > 0 ? +r.maxUses : '') + '"></label>' +
+      '<label>Name shown to the client (optional)<input class="input" name="label" value="' + esc(r.label || '') + '" placeholder="e.g. Big campaign discount"></label>' +
+      '<label>Ends on (optional; empty = no end)<input class="input" type="date" name="expires" value="' + esc(r.expires || '') + '"></label>' +
+      '<label class="check"><input type="checkbox" name="active"' + (r.active === false ? '' : ' checked') + '> On</label>' +
+      '<p class="err" id="derr" role="alert"></p><div class="row-end"><button class="btn primary">Save discount</button></div></form>');
+    const f = m.querySelector('#df');
+    const show = () => {
+      const k = f.kind.value, tags = [k];
+      if (k === 'promo') { tags.push(f.amountType.value === 'fixed' ? 'promo-fixed' : 'promo-pct'); if (f.applies.value === 'campaigns') tags.push('promo-camp'); }
+      m.querySelectorAll('[data-for]').forEach((l) => { l.style.display = l.getAttribute('data-for').split(' ').some((t) => tags.includes(t)) ? '' : 'none'; });
+    };
+    ['kind', 'amountType', 'applies'].forEach((n) => f[n].addEventListener('change', show)); show();
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const err = (t) => { m.querySelector('#derr').textContent = t; };
+      const kind = f.kind.value, fixed = kind === 'promo' && f.amountType.value === 'fixed', pct = +f.pct.value;
+      if (!fixed && !(pct > 0 && pct <= 90)) return err('Percent off must be between 1 and 90.');
+      const rec = { id: id || undefined, kind, pct: fixed ? 0 : pct, label: f.label.value.trim(), active: f.active.checked, min: null, code: '', clientId: '', clientEmail: '', expires: f.expires.value || '',
+        amountType: 'pct', amount: 0, applies: 'order', campaignNames: [], companyId: '', company: '', maxUses: 0 };
+      if (kind === 'bikes' || kind === 'weeks') rec.min = Math.max(1, Math.round(+f.min.value || 1));
+      if (kind === 'promo') { rec.code = f.code.value.trim().toUpperCase().replace(/\s+/g, ''); if (!rec.code) return err('Type the promo code.');
+        if (Data.list('discounts').some((x) => x.kind === 'promo' && x.id !== id && String(x.code).toUpperCase() === rec.code)) return err('That code already exists.');
+        if (fixed) { rec.amountType = 'fixed'; rec.amount = Math.round((+f.amount.value || 0) * 100) / 100; if (!(rec.amount > 0)) return err('Type how many dollars off.'); }
+        if (f.applies.value === 'campaigns') { rec.applies = 'campaigns'; rec.campaignNames = Data.campaignNames({ campaignNames: f.campaignNames.value }); if (!rec.campaignNames.length) return err('Type the campaign names, or pick "The whole order".'); }
+        const co = Data.get('users', f.companyId.value); if (co) { rec.companyId = co.id; rec.company = co.company || ''; }
+        rec.maxUses = Math.max(0, Math.round(+f.maxUses.value || 0)); }
+      if (kind === 'client') { rec.clientId = f.clientId.value; const u = Data.get('users', rec.clientId); rec.clientEmail = (f.clientEmail.value.trim() || (u && u.email) || '').toLowerCase(); if (!rec.clientId && !rec.clientEmail) return err('Pick a client or type the email.'); }
+      Data.put('discounts', rec); closeModal(); toast(kind === 'promo' ? 'Promo code ' + rec.code + ' saved' : 'Discount saved'); if (after) after(rec);
+    });
   }
 
   function renderSettings(root) {
@@ -582,6 +611,6 @@
     ],
     teardown,
     /* Nov 8 2026: the admin menu (js/admin-menu.js) re-uses these panels inside its sections */
-    parts: { approve, decline, renderMap, renderBikes, renderBookings, renderBooks, renderSettings, payAdmin, discountsAdmin, editBooking, editBike, bookingsCsv }
+    parts: { approve, decline, renderMap, renderBikes, renderBookings, renderBooks, renderSettings, payAdmin, discountsAdmin, editDiscount, editBooking, editBike, bookingsCsv }
   };
 })();

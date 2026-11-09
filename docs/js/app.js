@@ -17,6 +17,7 @@
     box: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
     plus: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
     chart: '<path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
     money: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4m12-4v4"/>'
   };
   const ROLE_LABEL = { admin: 'Admin', client: 'Client', driver: 'Driver', store: 'Store', boss: 'Boss' };
@@ -38,6 +39,7 @@
     async start() {
       /* Nov 8 2026: sign-in goes through Auth (js/auth.js): the shared Supabase database when its keys are set in
        * js/config.js, otherwise this browser only. No demo members or demo logins any more. */
+      if (window.Referrals) Referrals.capture(); /* Nov 8 2026 7 PM: a share link (?ref=CODE) keeps the referral code until sign-up */
       let dbUser = null;
       try { dbUser = await Auth.init(() => { current = null; App.render(); }); }
       catch (e) { console.error(e); toast(Auth.friendly(e)); }
@@ -48,6 +50,7 @@
       else { const sid = localStorage.getItem(SESSION); current = sid ? Data.get('users', sid) : null; }
       if (current && !views(current.role)) current = null;
       if (current && current.role === 'admin') Data.saveStartIfNew().catch((e) => console.error(e));
+      if (current && current.role === 'client' && window.Referrals) Referrals.autoClaim(current).then((r) => { if (r && r.ok) App.render(); });
       TrackerFeed.start();
       if (DELIVERY && window.Deliver) Deliver.Live.start();
       if (DELIVERY && current && current.role === 'driver') DriverViews.resume(current);
@@ -59,6 +62,7 @@
     login(user) {
       current = user; if (!Auth.remote) localStorage.setItem(SESSION, user.id); sessionStorage.removeItem(VIEWAS);
       if (user.role === 'admin') Data.saveStartIfNew().catch((e) => console.error(e));
+      if (user.role === 'client' && window.Referrals) Referrals.autoClaim(user).then((r) => { if (r && r.ok) { toast('Referral code used: your first order gets a discount.'); App.render(); } }); /* Nov 8 2026 7 PM */
       const go = home(user.role); if (location.hash === go) App.render(); else location.hash = go;
     },
     async logout() {
@@ -220,6 +224,9 @@
       '<label>Phone<input class="input" name="phone" type="tel" autocomplete="tel"></label>' +
       '<label>Email<input class="input" name="email" type="email" required autocomplete="email"></label>' +
       '<label>Password<input class="input" name="password" type="password" minlength="8" required autocomplete="new-password"></label>' +
+      /* Nov 8 2026 7 PM: referral code (filled in from a share link) */
+      (window.Referrals && (Referrals.on() || Referrals.pending()) ? '<label>Referral code (optional)<input class="input" name="ref" autocomplete="off" value="' + esc(Referrals.pending()) + '" placeholder="From the business that sent you"></label>' +
+        (Referrals.pending() && Referrals.on() ? '<p class="small ref-hint">✓ You were invited: your first order gets a discount.</p>' : '') : '') +
       '<p class="err" id="err" role="alert"></p><button class="btn primary wide big" id="signbtn">Create account</button></form>' +
       '<p class="center"><a href="#/login">‹ Back to log in</a> · <a href="#/">Main page</a></p>' + storeNote() + '</div></div></main>';
     const f = $('#signform'), err = $('#err'), btn = $('#signbtn');
@@ -229,7 +236,9 @@
       if (f.password.value.length < 8) { err.textContent = 'Please use a password of at least 8 characters.'; return; }
       busy(btn, true, 'Creating account…');
       try {
-        const r = await Auth.signUp({ name: f.name.value.trim(), company: f.company.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim().toLowerCase(), password: f.password.value });
+        const ref = f.ref ? f.ref.value.trim().toUpperCase() : '';
+        if (window.Referrals) Referrals.setPending(ref);
+        const r = await Auth.signUp({ name: f.name.value.trim(), company: f.company.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim().toLowerCase(), password: f.password.value, ref });
         if (r.confirm) {
           $('.auth-card').innerHTML = brandBlock() + '<h2>Check your email</h2><p>We sent a link to <b>' + esc(f.email.value.trim()) + '</b>. Open it to confirm your account, then log in.</p><a class="btn primary wide big pill" href="#/login">Go to log in</a>';
           return;

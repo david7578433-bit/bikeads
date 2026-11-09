@@ -19,6 +19,7 @@
     shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/>',
     menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+    gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8c-1.5-3-5-3.5-5-1s3 1 5 1c2 0 5 1.5 5-1s-3.5-2-5 1"/>',
     sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'
   };
 
@@ -32,7 +33,8 @@
         '@paymethods': (el) => P().payAdmin && P().payAdmin(el),
         '@homevideo': (el) => (window.HomeVideo ? HomeVideo.renderAdmin(el) : el.remove()),
         '@homecontent': (el) => (window.HomePage ? HomePage.renderAdmin(el) : el.remove()),
-        '@emailstatus': (el) => (window.Mailer ? emailStatus(el) : el.remove())
+        '@emailstatus': (el) => (window.Mailer ? emailStatus(el) : el.remove()),
+        '@referrals': (el) => (window.Referrals ? Referrals.renderAdmin(el) : el.remove()) /* Nov 8 2026 7 PM */
       };
       AdminForms.renderFields($('#set-host', root), sec, parts, rest && rest[0] ? decodeURIComponent(rest[0]) : '');
     };
@@ -43,6 +45,7 @@
     { key: 'bookings', label: 'Bookings', icon: 'cal', group: 'Work', render: (r) => P().renderBookings(r), badge: () => Data.list('bookings').filter((b) => b.status === 'pending').length },
     { key: 'bikes', label: 'Bikes', icon: 'bike', group: 'Work', render: renderBikesPlus },
     { key: 'clients', label: 'Clients', icon: 'users', group: 'Work', render: renderClients },
+    { key: 'referrals', label: 'Referrals', icon: 'gift', group: 'Work', render: settingsPage('referrals') }, /* Nov 8 2026 7 PM */
     { key: 'inbox', label: 'Inbox', icon: 'inbox', group: 'Work', render: (r) => Inbox.renderAdmin(r), badge: () => (window.Inbox ? Inbox.waiting() : 0) },
     { key: 'map', label: 'Live map', icon: 'map', group: 'Work', render: (r, u) => P().renderMap(r, u) },
     { key: 'books', label: 'Money & books', icon: 'book', group: 'Work', render: (r) => P().renderBooks(r) },
@@ -86,7 +89,7 @@
     SS().SECTIONS.forEach((s) => s.fields.forEach((d) => {
       if ((d.label + ' ' + (d.help || '')).toLowerCase().includes(q)) hits.push({ href: '#/' + role + '/' + s.key + (d.k[0] === '@' ? '' : '/' + encodeURIComponent(d.k)), t: d.label, sub: s.title });
     }));
-    [['zelle', 'pricing', 'Payment methods / Zelle'], ['promo', 'pricing', 'Promo codes'], ['discount', 'pricing', 'Discounts'], ['video', 'content', 'Main video'], ['stats', 'content', 'Numbers (stats)'], ['review', 'content', 'Reviews'], ['story', 'content', 'Our story'],
+    [['zelle', 'pricing', 'Payment methods / Zelle'], ['promo', 'pricing', 'Promo codes'], ['referral', 'referrals', 'Referrals'], ['refer', 'referrals', 'Referrals'], ['company code', 'pricing', 'Promo code for one company'], ['discount', 'pricing', 'Discounts'], ['video', 'content', 'Main video'], ['stats', 'content', 'Numbers (stats)'], ['review', 'content', 'Reviews'], ['story', 'content', 'Our story'],
       ['admin', 'account', 'Admins'], ['invoice', 'bookings', 'Invoices (Bookings → Invoice)'], ['request', 'bookings', 'Requests to approve'], ['email', 'email', 'Email'], ['backup', 'account', 'Backup / export'], ['export', 'bookings', 'Export bookings (CSV)'], ['call', 'inbox', 'Call requests'], ['feedback', 'inbox', 'Feedback'], ['area', 'bikes', 'Areas'], ['tracker', 'bikes', 'Trackers'], ['balance', 'books', 'Bank balance']]
       .forEach(([w, k, t]) => { if (w.includes(q) || q.includes(w)) hits.push({ href: '#/' + role + '/' + k, t, sub: (SECTIONS.find((s) => s.key === k) || {}).label }); });
     const seen = new Set();
@@ -170,6 +173,7 @@
       const item = (u) => '<li class="cl-item' + (u.disabled ? ' off' : '') + '"><div><b>' + esc(u.name || u.email) + '</b>' + (u.role === 'admin' ? ' <span class="role-pill admin">Admin</span>' : '') + (u.disabled ? ' <span class="badge st-declined">Turned off</span>' : '') +
         '<span class="small muted">' + esc([u.company, u.email, u.phone].filter(Boolean).join(' · ')) + '</span><span class="small muted">' + nb(u) + ' booking' + (nb(u) === 1 ? '' : 's') + (u.createdAt ? ' · joined ' + esc(fmtDate(String(u.createdAt).slice(0, 10))) : '') + '</span></div>' +
         '<div class="cl-actions"><button class="btn ghost small-btn" data-cview="' + esc(u.id) + '">View</button>' +
+        (u.role === 'client' ? '<button class="btn ghost small-btn" data-cpromo="' + esc(u.id) + '">Give promo code</button>' : '') + /* Nov 8 2026 7 PM: a promo code for this company */
         (u.id === (me && me.id) ? '<span class="small muted">You</span>' : (u.role === 'admin' ? '<button class="btn ghost small-btn" data-crole="' + esc(u.id) + '">Remove admin</button>' : '<button class="btn ghost small-btn" data-crole="' + esc(u.id) + '">Make admin</button>') +
           '<button class="btn ' + (u.disabled ? 'ghost' : 'danger-ghost') + ' small-btn" data-cdis="' + esc(u.id) + '">' + (u.disabled ? 'Turn on' : 'Turn off') + '</button>') + '</div></li>';
       /* Nov 8 2026 7 PM: grouped by company / agency (e.g. Pivot Marketing with its campaigns) */
@@ -185,19 +189,32 @@
     draw();
     $('#cl-q', root).addEventListener('input', (e) => { q = e.target.value.trim().toLowerCase(); draw(); });
     root.addEventListener('click', (e) => {
-      const v = e.target.closest('[data-cview]'), r = e.target.closest('[data-crole]'), d = e.target.closest('[data-cdis]');
+      const v = e.target.closest('[data-cview]'), r = e.target.closest('[data-crole]'), d = e.target.closest('[data-cdis]'), pc = e.target.closest('[data-cpromo]');
       if (v) return viewClient(v.getAttribute('data-cview'));
+      if (pc) return givePromo(pc.getAttribute('data-cpromo'), draw);
       if (r) { const u = Data.get('users', r.getAttribute('data-crole')); const mk = u.role !== 'admin';
         return confirmBox(mk ? 'Make ' + (u.name || u.email) + ' an admin?' : 'Remove admin from ' + (u.name || u.email) + '?', mk ? 'They will see this whole admin menu and can change everything.' : 'They become a normal client again.', mk ? 'Make admin' : 'Remove admin', async () => { Data.put('users', { id: u.id, role: mk ? 'admin' : 'client' }); await saved('users'); draw(); }, !mk); }
       if (d) { const u = Data.get('users', d.getAttribute('data-cdis')); const off = !u.disabled;
         return confirmBox(off ? 'Turn off ' + (u.name || u.email) + '?' : 'Turn ' + (u.name || u.email) + ' on again?', off ? 'They cannot sign in or book until you turn the account on again. Nothing is deleted.' : 'They can sign in and book again.', off ? 'Turn off' : 'Turn on', async () => { Data.put('users', { id: u.id, disabled: off }); await saved('users'); draw(); }, off); }
     });
   }
+  /* Nov 8 2026 7 PM (David: "this organization get a discount, so we give this organization a promo code"):
+   * a promo code only this client's company can use (e.g. PIVOT10, 10% off the whole order, for Pivot Marketing). */
+  function givePromo(id, after) {
+    const u = Data.get('users', id); if (!u || !P().editDiscount) return;
+    const word = String(u.company || u.name || 'CLIENT').trim().split(/\s+/)[0]; /* "Pivot Marketing" → PIVOT10 */
+    const base = word.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'CLIENT';
+    let code = base + '10', i = 2;
+    while (Data.list('discounts').some((x) => x.kind === 'promo' && String(x.code).toUpperCase() === code)) code = base + '10' + (i++);
+    P().editDiscount(null, { kind: 'promo', code, pct: 10, amountType: 'pct', applies: 'order', companyId: u.id, company: u.company || '', label: '' }, () => { if (after) after(); });
+  }
+  function promoCodesOf(u) { return Data.list('discounts').filter((d) => d.kind === 'promo' && (d.companyId === u.id || (d.company && u.company && d.company.trim().toLowerCase() === u.company.trim().toLowerCase()))); }
   async function saved(name) { try { await Data.flush(name); toast('Saved ✓'); } catch (e) { console.error(e); toast('Not saved: ' + (Auth.friendly ? Auth.friendly(e) : e.message)); } }
   function viewClient(id) {
     const u = Data.get('users', id); if (!u) return;
     const bks = Data.list('bookings').filter((b) => b.clientId === u.id).sort((a, b) => (a.start < b.start ? 1 : -1));
     modal(u.name || u.email, '<dl class="kv"><dt>Company</dt><dd>' + esc(u.company || '—') + '</dd><dt>Email</dt><dd>' + esc(u.email || '—') + '</dd><dt>Phone</dt><dd>' + esc(u.phone || '—') + '</dd><dt>Role</dt><dd>' + (u.role === 'admin' ? 'Admin' : 'Client') + (u.disabled ? ' (turned off)' : '') + '</dd></dl>' +
+      (promoCodesOf(u).length ? '<h3>Promo codes for ' + esc(u.company || u.name) + '</h3><ul class="dash-list">' + promoCodesOf(u).map((d) => '<li><span><b>' + esc(d.code) + '</b> ' + esc(Data.isFixed(d) ? money(d.amount) + ' off' : (+d.pct) + '% off') + (d.active === false || Data.expired(d) ? ' · off' : '') + '</span></li>').join('') + '</ul>' : '') +
       '<h3>Bookings</h3>' + (bks.length ? '<ul class="dash-list">' + bks.map((b) => '<li><span><b>' + esc(UI.fmtRange(b.start, b.end)) + '</b> ' + badge(b) + '<span>' + (b.bikeIds || []).length + ' bikes · ' + esc(money(b.total)) + (window.Campaigns && Campaigns.isMulti(b) ? ' · ' + esc(Campaigns.summary(Campaigns.active(b))) : '') + '</span></span></li>').join('') + '</ul>' : '<p class="muted">No bookings yet.</p>') +
       '<div class="row-end"><button class="btn ghost" data-close>Close</button></div>');
   }
@@ -320,7 +337,8 @@
       return ['Campaign: ' + c.name, n + ' bikes · ' + UI.fmtRange(c.start, c.end) + ' · ' + wk(c.weeks) + ' · setup ' + D(c.setup) + ' + weekly ' + D(c.weekly), c.subtotal]; }) :
       [['Printing & setup', (x.bikeIds || []).length + ' bikes × ' + D(x.setupFeePerBike) + ' (one time)', x.setupTotal],
       ['Weekly charge', (x.bikeIds || []).length + ' bikes × ' + D(x.weeklyPerBike) + ' a week × ' + x.weeks + ' week' + (x.weeks > 1 ? 's' : ''), x.weeklyTotal]])
-      .concat((x.discounts || []).map((d) => ['Discount: ' + d.label, d.pct + '% off' + (x.promoCode && d.kind === 'promo' ? ' (code ' + x.promoCode + ')' : ''), -d.amount]));
+      .concat((x.discounts || []).length && x.subtotal != null ? [['Subtotal', '', x.subtotal]] : []) /* Nov 8 2026 7 PM: subtotal, then each discount line */
+      .concat((x.discounts || []).map((d) => ['Discount: ' + d.label, Data.discText(d, D) + (x.promoCode && d.kind === 'promo' && !/code/i.test(d.label) ? ' (code ' + x.promoCode + ')' : ''), -d.amount]));
     root.innerHTML = '<section class="page adm-page"><div class="page-head"><a class="back" href="#/admin/bookings">‹ Bookings</a><h1>Invoice</h1></div>' +
       '<div class="inv-actions"><button class="btn primary" id="inv-print">Print / Save as PDF</button><button class="btn" id="inv-mail">Email to client</button></div><p class="center small muted" id="inv-status">' + esc(lastMail(x)) + '</p>' +
       '<article class="invoice" id="invoice"><div class="inv-head"><div><h2>' + esc(s.businessName || 'Media on Wheels') + '</h2><div class="small">' + esc([hc.contactPhone, hc.contactEmail, SS().get('contactAddress')].filter(Boolean).join(' · ')) + '</div></div>' +

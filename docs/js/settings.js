@@ -30,8 +30,18 @@
       f('weeksMax', 'Longest booking', 'number', 52, { suffix: 'weeks', min: 1, step: 1, live: true }),
       f('pricesAreSamples', 'Still sample prices (shows a "sample prices" note)', 'toggle', false, { live: true }),
       f('pricePerBikeDay', "Admin's own booking editor: price per bike per day", 'number', 25, { suffix: 'dollars', min: 0, step: 1, live: true }),
-      { k: '@discounts', type: 'part', label: 'Discounts and promo codes' },
+      { k: '@discounts', type: 'part', label: 'Discounts and promo codes (also for one company, e.g. PIVOT10 for Pivot Marketing)' },
       { k: '@paymethods', type: 'part', label: 'Payment methods (Card, Google Pay, Apple Pay, Zelle)' }
+    ] },
+    /* Nov 8 2026 7 PM (David: "Also, maybe add the option of referrals") — js/referrals.js */
+    { key: 'referrals', title: 'Referrals', icon: 'gift', intro: 'Every client has a referral code and link (My account → "Refer a business"). A new business that signs up with it gets a discount on its first order; when that order is approved, the client who referred them gets a reward on their next order. Both are taken off by themselves.', fields: [
+      f('refOn', 'Referrals on', 'toggle', true, { live: true, help: 'Off = new codes give nothing. Rewards already earned still count.' }),
+      f('refNewType', 'New client gets', 'select', 'pct', { options: [['pct', 'Percent off'], ['fixed', 'Dollars off']], live: true }),
+      f('refNewValue', 'New client discount on the first order', 'number', 10, { min: 0, step: 0.5, live: true, help: 'Percent or dollars, as picked above. Start: 10%.' }),
+      f('refRewardType', 'Referrer gets', 'select', 'pct', { options: [['pct', 'Percent off'], ['fixed', 'Dollars off']], live: true }),
+      f('refRewardValue', 'Referrer reward on their next order', 'number', 10, { min: 0, step: 0.5, live: true, help: 'Percent or dollars, as picked above. Start: 10%.' }),
+      f('refWhen', "The referrer's reward is earned when the new client's first order is", 'select', 'approved', { options: [['approved', 'Approved (or its deposit paid)'], ['deposit', 'Deposit paid']], live: true }),
+      { k: '@referrals', type: 'part', label: 'All referrals (who referred whom, status, reward used)' }
     ] },
     { key: 'calendar', title: 'Calendar & days', icon: 'cal', intro: 'The booking calendar. The bikes ride 6 days a week: Shabbos is always closed.', fields: [
       f('shabbosNoteOn', 'Show the Shabbos line above the calendar', 'toggle', true, { live: true }),

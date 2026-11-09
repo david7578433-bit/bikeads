@@ -117,7 +117,8 @@ test('database mode (mocked Supabase): loads with RLS-shaped answers, saves only
 test('schema.sql: mow_ prefixed, additive only, RLS on, David admin, trigger + ensure function', () => {
   const sql = fs.readFileSync(path.join(root, 'supabase', 'schema.sql'), 'utf8');
   const code = sql.replace(/--.*$/gm, '');
-  assert.ok(!/\bdrop\b/i.test(code), 'no DROP');
+  /* the one allowed DROP (Nov 8 2026 7 PM): relaxing the percent CHECK so a promo code can be dollars off — no table, column or data is removed */
+  assert.ok(!/\bdrop\b/i.test(code.replace(/alter table public\.mow_discounts drop constraint if exists mow_discounts_pct_check;/g, '')), 'no DROP');
   (code.match(/alter table\s+[\w.]+/gi) || []).forEach((m) => assert.match(m, /public\.mow_/i, m));
   (code.match(/create (?:table|or replace function|policy|index)(?: if not exists)?\s+(?:public\.)?(\w+)/gi) || []).forEach((m) => assert.match(m, /mow_/i, m));
   for (const t of ['mow_profiles', 'mow_settings', 'mow_records', 'mow_admin_emails', 'mow_discounts']) assert.match(code, new RegExp('alter table public\\.' + t + '\\s+enable row level security'), t + ' RLS');
@@ -181,7 +182,7 @@ test('price step: discounts from the admin price table, 20% deposit now, balance
   Data.saveSettings({ depositPct: 50 }); assert.strictEqual(Data.priceQuote(5, st, wk1).deposit, 562.5);
   const a = read('js/admin.js'), c = read('js/client.js');
   for (const s of ['Price table &amp; discounts', 'data-ddel', 'Promo code', 'One client', 'Mark balance paid', 'Deposit due at booking (%)']) assert.ok(a.includes(s), s);
-  for (const s of ['Deposit due now (', 'Balance later', 'Promo code (optional)', 'Pay deposit ', 'Auth.checkPromo']) assert.ok(c.includes(s), s);
+  for (const s of ['Deposit due now (', 'Balance later', 'Promo or referral code (optional)', 'Pay deposit ', 'Auth.checkPromo']) assert.ok(c.includes(s), s);
 });
 
 test('client confirmation and My bookings show the bike count, not bike numbers', () => {

@@ -20,7 +20,7 @@
   /* ---------- small helpers ---------- */
   const siteUrl = () => location.origin + location.pathname;
   const clean = (o) => JSON.parse(JSON.stringify(o == null ? null : o));
-  const toUser = (p) => p && ({ id: p.id, role: p.role || 'client', name: p.name || (p.email || '').split('@')[0], company: p.company || '', phone: p.phone || '', email: p.email || '', createdAt: p.created_at, ...(p.disabled != null ? { disabled: !!p.disabled } : {}) });
+  const toUser = (p) => p && ({ id: p.id, role: p.role || 'client', name: p.name || (p.email || '').split('@')[0], company: p.company || '', phone: p.phone || '', email: p.email || '', createdAt: p.created_at, ...(p.disabled != null ? { disabled: !!p.disabled } : {}), ...(p.referral_code ? { refCode: p.referral_code } : {}) }); /* refCode: Nov 8 2026 7 PM referrals */
   async function sha256(text) {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -74,7 +74,9 @@
         if (!locs.error) (locs.data || []).forEach((r) => st.locations.push(Object.assign({}, r.data, { id: r.id })));
         return st;
       }
-      const [pr, rec, dis] = await Promise.all([sb.from('mow_profiles').select('*'), sb.from('mow_records').select('collection,id,data'), sb.from('mow_discounts').select('*')]);
+      const [pr, rec, dis, rf] = await Promise.all([sb.from('mow_profiles').select('*'), sb.from('mow_records').select('collection,id,data'), sb.from('mow_discounts').select('*'), sb.from('mow_referrals').select('*')]);
+      st.referrals = []; snap.referrals = new Map(); /* Nov 8 2026 7 PM: a client sees only their own referral rows (RLS); the admin all */
+      if (!rf.error) (rf.data || []).forEach((d) => { const r = fromReferral(d); st.referrals.push(r); snap.referrals.set(r.id, key(r)); });
       if (pr.error) throw pr.error; if (rec.error) throw rec.error;
       st.discounts = []; snap.discounts = new Map();
       if (!dis.error) (dis.data || []).forEach((d) => { const r = fromDiscount(d); st.discounts.push(r); snap.discounts.set(r.id, key(r)); });
@@ -104,8 +106,29 @@
   };
 
   /* Discounts (admin price table) live in their own table, mow_discounts (promo codes are not readable by clients). */
-  const fromDiscount = (d) => ({ id: d.id, kind: d.kind, min: d.min_count, code: d.code || '', clientId: d.client_id || '', clientEmail: d.client_email || '', pct: +d.pct, label: d.label || '', active: d.active !== false, expires: d.expires_on || '' });
-  const toDiscount = (r) => ({ id: r.id, kind: r.kind, min_count: r.min == null ? null : Math.round(+r.min), code: r.code || null, client_id: uuidLike(r.clientId) ? r.clientId : null, client_email: (r.clientEmail || '').toLowerCase() || null, pct: +r.pct, label: r.label || '', active: r.active !== false, ...(r.expires ? { expires_on: r.expires } : {}) }); /* expires_on: Nov 8 2026 admin-menu migration in schema.sql */
+  /* Nov 8 2026 7 PM: + amount_type/amount_off (dollars off), applies_to/campaign_names (some campaigns only), company_id/company
+   * (only this company may use the code), max_uses (usage limit) — migration 20261109_promo_referrals.sql */
+  const fromDiscount = (d) => ({ id: d.id, kind: d.kind, min: d.min_count, code: d.code || '', clientId: d.client_id || '', clientEmail: d.client_email || '', pct: +d.pct, label: d.label || '', active: d.active !== false, expires: d.expires_on || '',
+    amountType: d.amount_type === 'fixed' ? 'fixed' : 'pct', amount: +d.amount_off || 0, applies: d.applies_to === 'campaigns' ? 'campaigns' : 'order', campaignNames: Array.isArray(d.campaign_names) ? d.campaign_names : [],
+    companyId: d.company_id || '', company: d.company || '', maxUses: +d.max_uses || 0 });
+  const toDiscount = (r) => ({ id: r.id, kind: r.kind, min_count: r.min == null ? null : Math.round(+r.min), code: r.code || null, client_id: uuidLike(r.clientId) ? r.clientId : null, client_email: (r.clientEmail || '').toLowerCase() || null, pct: +r.pct || 0, label: r.label || '', active: r.active !== false, expires_on: r.expires || null, /* expires_on: Nov 8 2026 admin-menu migration in schema.sql */
+    amount_type: r.amountType === 'fixed' ? 'fixed' : 'pct', amount_off: r.amountType === 'fixed' ? (+r.amount || 0) : null, applies_to: r.applies === 'campaigns' ? 'campaigns' : 'order',
+    campaign_names: r.applies === 'campaigns' ? (Array.isArray(r.campaignNames) ? r.campaignNames : []) : [], company_id: uuidLike(r.companyId) ? r.companyId : null, company: r.company || '', max_uses: +r.maxUses > 0 ? Math.round(+r.maxUses) : null });
+  /* Referrals (Nov 8 2026 7 PM, table mow_referrals) */
+  const ts = (v) => (v ? v : null);
+  const fromReferral = (d) => ({ id: d.id, code: d.code || '', referrerId: d.referrer_id || '', referredId: d.referred_id || '', referrerName: d.referrer_name || '', referredName: d.referred_name || '', status: d.status || 'joined',
+    firstBookingId: d.first_booking_id || '', rewardBookingId: d.reward_booking_id || '', newType: d.new_type === 'fixed' ? 'fixed' : 'pct', newValue: +d.new_value || 0, rewardType: d.reward_type === 'fixed' ? 'fixed' : 'pct', rewardValue: +d.reward_value || 0,
+    note: d.note || '', manual: !!d.manual, createdAt: d.created_at || '', requestedAt: d.requested_at || '', earnedAt: d.earned_at || '', usedAt: d.used_at || '' });
+  const toReferral = (r) => ({ id: r.id, code: r.code || '', referrer_id: uuidLike(r.referrerId) ? r.referrerId : null, referred_id: uuidLike(r.referredId) ? r.referredId : null, referrer_name: r.referrerName || '', referred_name: r.referredName || '', status: r.status || 'joined',
+    first_booking_id: r.firstBookingId || null, reward_booking_id: r.rewardBookingId || null, new_type: r.newType === 'fixed' ? 'fixed' : 'pct', new_value: +r.newValue || 0, reward_type: r.rewardType === 'fixed' ? 'fixed' : 'pct', reward_value: +r.rewardValue || 0,
+    note: r.note || '', manual: !!r.manual, requested_at: ts(r.requestedAt), earned_at: ts(r.earnedAt), used_at: ts(r.usedAt) });
+  async function saveReferrals(list) {
+    const before = snap.referrals || (snap.referrals = new Map()), seen = new Set(), rows = [];
+    (list || []).forEach((r) => { if (!r || !r.id) return; seen.add(r.id); const k = key(r); if (before.get(r.id) !== k) rows.push([toReferral(r), k]); });
+    if (rows.length) { const res = await sb.from('mow_referrals').upsert(rows.map((x) => x[0]), { onConflict: 'id' }); if (res.error) throw res.error; rows.forEach(([r, k]) => before.set(r.id, k)); }
+    const gone = Array.from(before.keys()).filter((id) => !seen.has(id));
+    if (gone.length) { const res = await sb.from('mow_referrals').delete().in('id', gone); if (res.error) throw res.error; gone.forEach((id) => before.delete(id)); }
+  }
   async function saveDiscounts(list) {
     const before = snap.discounts || (snap.discounts = new Map()), seen = new Set(), rows = [];
     (list || []).forEach((r) => { if (!r || !r.id) return; seen.add(r.id); const k = key(fromDiscount(toDiscount(r))); if (before.get(r.id) !== k) rows.push([toDiscount(r), k]); });
@@ -122,10 +145,11 @@
   async function save(name, all) {
     if (!sb || !profile) return;
     const admin = profile.role === 'admin';
-    const names = name === 'all' ? ['settings', 'users', 'discounts'].concat(RECORDS) : [name];
+    const names = name === 'all' ? ['settings', 'users', 'discounts', 'referrals'].concat(RECORDS) : [name];
     for (const n of names) {
       if (n === 'settings') { if (admin) await saveSettings(all.settings); continue; }
       if (n === 'discounts') { if (admin) await saveDiscounts(all.discounts); continue; }
+      if (n === 'referrals') { if (admin) await saveReferrals(all.referrals); continue; } /* clients use mow_claim_referral / mow_referral_mark */
       if (n === 'users') { await saveUsers(all.users || [], admin); continue; }
       if (!RECORDS.includes(n) || !Array.isArray(all[n])) continue;
       const before = snap[n] || (snap[n] = new Map());
@@ -246,7 +270,7 @@
     async signUp(info) {
       if (!REMOTE) return Local.signUp(info);
       const { data, error } = await sb.auth.signUp({ email: info.email.trim(), password: info.password,
-        options: { emailRedirectTo: siteUrl(), data: { app: 'mediaonwheels', name: info.name, company: info.company, phone: info.phone } } });
+        options: { emailRedirectTo: siteUrl(), data: Object.assign({ app: 'mediaonwheels', name: info.name, company: info.company, phone: info.phone }, info.ref ? { ref: String(info.ref).trim().toUpperCase() } : {}) } }); /* ref: Nov 8 2026 7 PM referral code (the database uses it when the profile is made) */
       if (error) throw new Error(friendly(error));
       if (!data.session) return { confirm: true };
       await Auth.loadProfile(data.user, info);
@@ -281,6 +305,31 @@
       if (res.error) throw new Error(friendly(res.error));
       const row = Array.isArray(res.data) ? res.data[0] : res.data;
       return row ? fromDiscount(row) : null;
+    },
+    /* Nov 8 2026 7 PM: a promo code with its reason when it cannot be used: { rule } or { rule: null, reason:
+     * 'notfound' | 'expired' | 'company' (the code is for another company) | 'used' (usage limit reached) }. */
+    async checkPromoFor(code) {
+      if (!REMOTE) return Data.checkPromo(code, App.user && App.user());
+      const res = await sb.rpc('mow_promo_check', { p_code: String(code || '').trim() });
+      if (res.error) { const r = await Auth.checkPromo(code); return r ? { rule: r } : { rule: null, reason: 'notfound' }; } /* older database: the old check */
+      const out = res.data || {};
+      return out.ok && out.rule ? { rule: fromDiscount(out.rule) } : { rule: null, reason: out.reason || 'notfound' };
+    },
+    /* Referrals: a new client uses another client's code (the database checks: not your own, first order, program on) */
+    async claimReferral(code) {
+      const res = await sb.rpc('mow_claim_referral', { p_code: String(code || '').trim() });
+      if (res.error) throw new Error(friendly(res.error));
+      const out = res.data || {};
+      if (out.ok) await Auth.refresh();
+      return { ok: !!out.ok, reason: out.reason || '', referral: out.referral ? fromReferral(out.referral) : null };
+    },
+    /* a new order used the referral discount / reward: the database marks it taken (checks the order is this client's) */
+    async referralMark(bookingId) {
+      const res = await sb.rpc('mow_referral_mark', { p_booking_id: String(bookingId) });
+      if (res.error) throw new Error(friendly(res.error));
+      const rf = await sb.from('mow_referrals').select('*');
+      if (!rf.error) { snap.referrals = new Map(); const list = (rf.data || []).map(fromReferral); list.forEach((r) => snap.referrals.set(r.id, key(r))); list.forEach((r) => Data.put('referrals', r, { silent: true })); }
+      return res.data;
     },
     /* Nov 8 2026: "Leave feedback" / "Request a call". Database mode: one insert each (no reading back: visitors cannot read these tables). */
     async sendFeedback(f) {

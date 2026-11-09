@@ -107,6 +107,8 @@
     },
     /* re-price a saved order with its own promo code / client discount (after a campaign is declined or its bikes change) */
     reprice(b, rows) {
+      /* Nov 8 2026 7 PM: orders made since the company promo codes / referrals keep the exact rules they used (ruleSnap) */
+      if (b.ruleSnap) return Campaigns.totals(rows, { promo: b.ruleSnap.promo || null, extra: b.ruleSnap.extra || [], client: { id: b.clientId, email: b.contactEmail } });
       const promo = (b.discounts || []).find((d) => d.kind === 'promo');
       return Campaigns.totals(rows, { promo: promo ? { kind: 'promo', pct: promo.pct, label: promo.label, code: b.promoCode || '', active: true } : null,
         client: { id: b.clientId, email: b.contactEmail } });

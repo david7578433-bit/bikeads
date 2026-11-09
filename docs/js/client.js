@@ -13,7 +13,8 @@
   const clampCount = (n) => Math.max(MIN_BIKES(), Math.min(MAX_BIKES(), Math.round(+n) || MIN_BIKES()));
   /* Nov 8 2026: discounts (admin price table) + promo code for this booking */
   let me = null;
-  const quoteOpts = () => ({ promo: wiz.promo || null, client: me ? { id: me.id, email: me.email } : null });
+  /* Nov 8 2026 7 PM: + referral discount (new client's first order) / referral reward (js/referrals.js), taken off by themselves */
+  const quoteOpts = () => ({ promo: wiz.promo || null, client: me ? { id: me.id, email: me.email } : null, extra: window.Referrals && me ? Referrals.extraRules(me) : [] });
   const quote = () => (wiz.payFor && Data.get('bookings', wiz.payFor) ? bookingQuote(Data.get('bookings', wiz.payFor)) : MULTI() ? Data.priceQuoteMulti(effCampaigns(), quoteOpts()) : Data.priceQuote(wiz.count, wiz.start, wiz.end, quoteOpts()));
   /* Nov 8 2026 7 PM (David): several campaigns in one request ("Add another campaign"), see js/campaigns.js */
   const MULTI = () => !!(window.Campaigns && wiz.campaigns && wiz.campaigns.length > 1 && !wiz.payFor);
@@ -283,7 +284,7 @@
   }
 
   function tailRows(q) {
-    return (q.discounts || []).map((x) => '<tr class="disc"><td>Discount: ' + esc(x.label) + '<span class="calc">' + x.pct + '% off</span></td><td class="amt">−' + money(x.amount) + '</td></tr>').join('') +
+    return (q.discounts || []).map((x) => '<tr class="disc"><td>Discount: ' + esc(x.label) + '<span class="calc">' + esc(Data.discText(x, money)) + '</span></td><td class="amt">−' + money(x.amount) + '</td></tr>').join('') +
       '<tr class="total"><td>Total</td><td class="amt" id="grand">' + money(q.total) + '</td></tr>' +
       '<tr class="dep"><td><strong>' + (REQ() && !wiz.payFor ? 'Deposit after we approve' : 'Deposit due now') + ' (' + q.depositPct + '%)</strong></td><td class="amt"><strong>' + money(q.deposit) + '</strong></td></tr>' +
       '<tr class="bal"><td>Balance later<span class="calc">paid before the ads start; we confirm the date with you</span></td><td class="amt">' + money(q.balance) + '</td></tr>';
@@ -296,16 +297,30 @@
       '<tr class="sub"><td>Subtotal</td><td class="amt">' + money(q.subtotal) + '</td></tr>' +
       tailRows(q) + '</tbody></table>';
   }
+  /* Promo code box (Nov 8 2026 7 PM: also takes a referral code; a company code says when it is for another company) */
+  const PROMO_WORDS = { notfound: 'That code is not valid.', expired: 'That code has ended.', company: 'This code is for another company.', used: 'This code was already used the most times allowed.' };
+  function promoBoxHtml(q) {
+    const p = wiz.promo, line = p && (q.discounts || []).find((d) => d.kind === 'promo');
+    const note = p ? (line ? '✓ ' + esc(line.label) + ': ' + esc(Data.discText(line, money)) : Data.scoped(p) ? '⚠ Code ' + esc(p.code) + ' is only for these campaigns: ' + esc(Data.campaignNames(p).join(', ')) + '.' : '') : '';
+    return '<form class="promo" id="promo" novalidate><label>Promo or referral code (optional)<span class="promo-row"><input class="input" name="code" autocomplete="off" value="' + esc(p ? p.code || '' : '') + '"><button class="btn" type="submit">' + (p ? 'Change' : 'Apply') + '</button></span></label><p class="small" id="promo-msg" role="status">' + note + '</p></form>';
+  }
   function wirePromo(root) {
     $('#promo', root).addEventListener('submit', async (e) => {
       e.preventDefault();
       const code = e.target.code.value.trim(), msg = $('#promo-msg', root);
       if (!code) { wiz.promo = null; App.render(); return; }
       msg.textContent = 'Checking…';
-      let rule = null;
-      try { rule = window.Auth && Auth.remote ? await Auth.checkPromo(code) : Data.findPromo(code); } catch (ex) { rule = null; }
-      if (!rule) { wiz.promo = null; msg.textContent = 'That code is not valid.'; $('#ptab', root).innerHTML = (MULTI() ? priceTableMulti : priceTable)(quote()); return; }
-      wiz.promo = Object.assign({}, rule, { code: rule.code || code }); App.render();
+      let res = null;
+      try { res = window.Auth && Auth.remote ? await Auth.checkPromoFor(code) : Data.checkPromo(code, me); } catch (ex) { res = { rule: null, reason: 'notfound' }; }
+      if (res && res.rule) { wiz.promo = Object.assign({}, res.rule, { code: res.rule.code || code }); App.render(); return; }
+      const reason = (res && res.reason) || 'notfound';
+      if (reason === 'notfound' && window.Referrals) { /* not a promo code: maybe another client's referral code */
+        let rr = null;
+        try { rr = await Referrals.claim(me, code); } catch (ex) { rr = null; }
+        if (rr && rr.ok) { toast('Referral code applied: your first-order discount is in the price.'); App.render(); return; }
+        if (rr && rr.reason && rr.reason !== 'notfound') { wiz.promo = null; msg.textContent = Referrals.words(rr.reason); return; }
+      }
+      wiz.promo = null; msg.textContent = PROMO_WORDS[reason] || PROMO_WORDS.notfound; $('#ptab', root).innerHTML = (MULTI() ? priceTableMulti : priceTable)(quote());
     });
   }
   /* Price step for several campaigns: each campaign is its own block of lines, then the order total. */
@@ -320,7 +335,7 @@
   function renderPriceMulti(root) {
     if (!Campaigns.check(effCampaigns(), multiOpts()).ok) return go('dates');
     const q = quote();
-    const promoBox = '<form class="promo" id="promo" novalidate><label>Promo code (optional)<span class="promo-row"><input class="input" name="code" autocomplete="off" value="' + esc(wiz.promo ? wiz.promo.code || '' : '') + '"><button class="btn" type="submit">' + (wiz.promo ? 'Change' : 'Apply') + '</button></span></label><p class="small" id="promo-msg" role="status">' + (wiz.promo ? '✓ ' + esc(wiz.promo.label || 'Promo code') + ': ' + (+wiz.promo.pct) + '% off' : '') + '</p></form>';
+    const promoBox = promoBoxHtml(q);
     root.innerHTML = '<section class="page narrow"><div class="page-head"><button class="back" id="back">‹ Dates & bikes</button><h1>Your price</h1></div>' + steps4(3) +
       '<div class="card"><div class="sel-sum"><strong>' + esc(wiz.biz ? wiz.biz.company : '') + '</strong>' + (areaName() ? '<span>' + esc(areaName()) + '</span>' : '') +
       '<span>' + q.bikes + ' bikes in ' + Campaigns.word(q.campaigns.length) + ' · ' + esc(fmtRange(q.start, q.end)) + '</span><span class="campaign-line">' + esc(Campaigns.summary(q.campaigns)) + '</span></div>' +
@@ -343,7 +358,7 @@
     if (!wiz.specific) { wiz.count = clampCount(wiz.count); if (wiz.count > free.length) return go('dates'); } /* more bikes than are free: back to the dates step, which says so */
     const q = quote();
     const J = window.JCal && JCal.ready ? JCal : null;
-    const promoBox = '<form class="promo" id="promo" novalidate><label>Promo code (optional)<span class="promo-row"><input class="input" name="code" autocomplete="off" value="' + esc(wiz.promo ? wiz.promo.code || '' : '') + '"><button class="btn" type="submit">' + (wiz.promo ? 'Change' : 'Apply') + '</button></span></label><p class="small" id="promo-msg" role="status">' + (wiz.promo ? '✓ ' + esc(wiz.promo.label || 'Promo code') + ': ' + (+wiz.promo.pct) + '% off' : '') + '</p></form>';
+    const promoBox = promoBoxHtml(q);
     root.innerHTML = '<section class="page narrow"><div class="page-head"><button class="back" id="back">‹ Dates & bikes</button><h1>Your price</h1></div>' + steps4(3) +
       '<div class="card"><div class="sel-sum"><strong>' + esc(wiz.biz ? wiz.biz.company : '') + '</strong>' + (areaName() ? '<span>' + esc(areaName()) + '</span>' : '') + (wiz.biz && wiz.biz.adText ? '<span class="campaign-line">Campaign: ' + esc(wiz.biz.adText) + '</span>' : '') + '<span>' + esc(fmtRange(wiz.start, wiz.end)) + ' · ' + q.days + ' days</span>' +
       (J ? '<span class="he" lang="he">' + esc(J.day(wiz.start).heFull) + ' – ' + esc(J.day(wiz.end).heFull) + '</span>' : '') + '</div>' +
@@ -417,7 +432,7 @@
         const num = (a, b) => a.number.localeCompare(b.number, undefined, { numeric: true });
         ids = free.filter((x) => x.locationId === wiz.area).sort(num).concat(free.filter((x) => x.locationId !== wiz.area).sort(num)).slice(0, wiz.count).map((x) => x.id);
       }
-      const qq = Data.priceQuote(ids.length, wiz.start, wiz.end, quoteOpts());
+      const qo = quoteOpts(), qq = Data.priceQuote(ids.length, wiz.start, wiz.end, qo);
       const b = wiz.biz || {};
       const now = new Date().toISOString();
       const rec = Data.put('bookings', {
@@ -426,12 +441,14 @@
         areaId: wiz.area || '', areaName: areaName(), areaNote: wiz.areaNote || '',
         start: wiz.start, end: wiz.end, bikeIds: ids, mode: wiz.specific ? 'specific' : 'count',
         pricePerDay: Math.round(qq.weeklyEach / 7 * 100) / 100, weeks: qq.weeks, setupFeePerBike: qq.setupEach, weeklyPerBike: qq.weeklyEach,
-        setupTotal: qq.setup, weeklyTotal: qq.weekly, subtotal: qq.subtotal, discounts: qq.discounts, discount: qq.discount, promoCode: wiz.promo ? wiz.promo.code || '' : '',
+        setupTotal: qq.setup, weeklyTotal: qq.weekly, subtotal: qq.subtotal, discounts: qq.discounts, discount: qq.discount, promoCode: usedPromo(qq),
+        ruleSnap: { promo: usedPromo(qq) ? wiz.promo : null, extra: qo.extra || [] },
         total: qq.total, depositPct: qq.depositPct, deposit: qq.deposit, depositPaid: !!paid, balance: qq.balance, balancePaid: false,
         payment: Object.assign({ amount: qq.deposit, at: now }, pay),
         status: 'pending', notes: note || '', createdAt: now,
         history: [{ at: now, by: b.contact || user.name, action: action.replace('{amount}', money(qq.deposit) + ' deposit') }]
       });
+      if (window.Referrals) Referrals.afterPlace(rec, user);
       return rec;
   }
 
@@ -442,16 +459,24 @@
     const as = Campaigns.assign(eff, { area: wiz.area });
     if (!as.ok) { toast('Some bikes were just booked. Please check the numbers.'); go('dates'); return null; }
     const rows = eff.map((c, i) => ({ id: c.id, name: c.name, bikes: c.bikes, start: c.start, end: c.end, own: !!c.own, adText: String(c.adText || '').trim(), bikeIds: as.ids[i] }));
-    const t = Campaigns.totals(rows, quoteOpts());
+    const qo = quoteOpts(), t = Campaigns.totals(rows, qo);
     const b = wiz.biz || {}, now = new Date().toISOString();
-    return Data.put('bookings', Object.assign({
+    const rec = Data.put('bookings', Object.assign({
       clientId: user.id, clientName: b.contact || user.name, company: b.company || user.company || user.name,
       contactPhone: b.phone || '', contactEmail: b.email || '', adText: b.adText || '',
       areaId: wiz.area || '', areaName: areaName(), areaNote: wiz.areaNote || '', mode: 'campaigns',
-      promoCode: wiz.promo ? wiz.promo.code || '' : '', depositPaid: !!paid, balancePaid: false,
+      promoCode: usedPromo(t.q), ruleSnap: { promo: usedPromo(t.q) ? wiz.promo : null, extra: qo.extra || [] }, depositPaid: !!paid, balancePaid: false,
       payment: Object.assign({ amount: t.q.deposit, at: now }, pay), status: 'pending', notes: note || '', createdAt: now,
       history: [{ at: now, by: b.contact || user.name, action: action.replace('{amount}', money(t.q.deposit) + ' deposit') + ' · ' + rows.length + ' campaigns: ' + Campaigns.summary(rows) }]
     }, t.patch));
+    if (window.Referrals) Referrals.afterPlace(rec, user);
+    return rec;
+  }
+  /* the promo code counts as used only when it really took something off (e.g. not a code for other campaigns) */
+  function usedPromo(q) { return wiz.promo && (q.discounts || []).some((d) => d.kind === 'promo') ? wiz.promo.code || '' : ''; }
+  /* "Discount: Promo code PIVOT10, 10% off (−337.50 dollars)." */
+  function discSentence(b) {
+    return (b.discounts || []).length ? ' Discount: ' + b.discounts.map((d) => d.label + ', ' + Data.discText(d, money)).join('; ') + ' (−' + money(b.discount) + '). Total ' + money(b.total) + '.' : '';
   }
 
   /* Request first (default): the booking is saved as "Requested" with nothing paid; the deposit is paid after approval. */
@@ -463,7 +488,8 @@
     const b = Data.get('bookings', rec.id);
     if (window.Mailer) { Mailer.send('requested', b); Mailer.send('newRequest', b); }
     go('done');
-    const text = window.Campaigns && Campaigns.isMulti(b) ? Campaigns.popupText(b) : window.SiteSettings ? SiteSettings.text('msgRequestPopup').replace(/\{bikes\}/g, b.bikeIds.length).replace(/\{dates\}/g, fmtRange(b.start, b.end)) : 'You requested ' + b.bikeIds.length + ' bikes.';
+    let text = window.Campaigns && Campaigns.isMulti(b) ? Campaigns.popupText(b) : window.SiteSettings ? SiteSettings.text('msgRequestPopup').replace(/\{bikes\}/g, b.bikeIds.length).replace(/\{dates\}/g, fmtRange(b.start, b.end)) : 'You requested ' + b.bikeIds.length + ' bikes.';
+    text += discSentence(b); /* Nov 8 2026 7 PM: the discount shows in the pop-up too */
     const m = UI.modal('Request sent', '<div class="req-pop center"><div class="done-mark" aria-hidden="true">✓</div><p class="lead" id="req-pop-text">' + esc(text) + '</p><div class="row-center"><button class="btn primary" data-close>OK</button></div></div>', { noFocus: true });
     m.parentNode.classList.add('req-pop-wrap');
   }
@@ -569,7 +595,7 @@
         '<dt>Bikes</dt><dd>' + b.bikeIds.length + '</dd>' +
         (window.Campaigns && Campaigns.isMulti(b) ? '<dt>Campaigns</dt><dd>' + Campaigns.listHtml(b, { money }) + '</dd>' : '') + /* Nov 8 2026 (client): count only, no bike numbers (admin still sees them) */
         '<dt>Printing & setup</dt><dd>' + money(b.setupTotal) + '</dd><dt>Weekly (' + b.weeks + ' wk)</dt><dd>' + money(b.weeklyTotal) + '</dd>' +
-        (b.discount ? '<dt>Discount</dt><dd>−' + money(b.discount) + '</dd>' : '') + '<dt>Total</dt><dd>' + money(b.total) + '</dd>' +
+        (b.discount ? '<dt>Discount</dt><dd>' + discHtml(b) + '</dd>' : '') + '<dt>Total</dt><dd>' + money(b.total) + '</dd>' +
         '<dt class="hl">' + (b.depositPaid ? 'Deposit paid' : isReq ? 'Deposit after approval' : 'Deposit to pay') + (b.depositPct != null ? ' (' + b.depositPct + '%)' : '') + '</dt><dd class="hl">' + money(b.deposit != null ? b.deposit : b.total) + '</dd>' +
         (b.balance != null ? '<dt>Balance later</dt><dd>' + money(b.balance) + (b.balancePaid ? ' · paid' : '') + '</dd>' : '') + (isReq ? '' : '<dt>Payment</dt><dd>' + payDesc(b) + '</dd>') +
         '<dt>Status</dt><dd>' + (b.status === 'approved' ? '<span class="badge st-approved">Approved</span>' : '<span class="badge st-pending">' + (isReq ? 'Requested' : 'Pending') + '</span> ' + esc(window.SiteSettings ? SiteSettings.text('msgPending') : 'until ' + (Data.settings().businessName || 'Media on Wheels') + ' approves it')) + '</dd></dl></div>' : '') +
@@ -580,6 +606,9 @@
     $('#tomy', root).addEventListener('click', () => resetWiz());
   }
 
+  function discHtml(b) {
+    return (b.discounts || []).length ? b.discounts.map((d) => esc(d.label) + ' <span class="muted">(' + esc(Data.discText(d, money)) + ')</span> −' + money(d.amount)).join('<br>') : '−' + money(b.discount);
+  }
   /* ================= MY BOOKINGS ================= */
   function payLine(b) {
     if (b.balance != null) return 'Total ' + money(b.total) + ' · deposit ' + money(b.deposit) + (b.depositPaid ? ' paid' : b.payment && b.payment.method === 'zelle' ? ' (awaiting Zelle)' : ' due') + ' · balance ' + money(b.balance) + (b.balancePaid ? ' paid' : ' due');
@@ -596,6 +625,7 @@
         (window.Campaigns && Campaigns.isMulti(b) ? Campaigns.listHtml(b, { money }) : '') +
         (b.adText ? '<div class="small campaign-text">Campaign: ' + esc(b.adText) + '</div>' : '') +
         (b.setupTotal != null ? '<div class="small muted">Printing & setup ' + money(b.setupTotal) + ' · weekly ' + money(b.weeklyTotal) + '</div>' : '') +
+        (b.discount ? '<div class="small disc-line">Discount: ' + discHtml(b) + '</div>' : '') + /* Nov 8 2026 7 PM */
         '<div class="small muted">' + payLine(b) + '</div>' +
         (b.adminNote && (b.status === 'approved' || b.status === 'declined') ? '<div class="small">Note from us: ' + esc(b.adminNote) + '</div>' : '') +
         (b.requestOnly && b.status === 'approved' && !b.depositPaid && !(b.payment && b.payment.method === 'zelle') ? '<div class="row-end"><button class="btn primary" data-paydep="' + b.id + '">Pay deposit ' + money(b.deposit) + ' ›</button></div>' : '') +
@@ -615,11 +645,22 @@
     });
   }
 
+  /* ================= MY ACCOUNT (Nov 8 2026 7 PM: "Refer a business" card) ================= */
+  function renderAccount(root, user) {
+    teardown(); me = user;
+    const u = Data.get('users', user.id) || user;
+    root.innerHTML = '<section class="page narrow"><div class="page-head"><h1>My account</h1></div>' +
+      '<div class="card"><dl class="kv"><dt>Name</dt><dd>' + esc(u.name || '—') + '</dd><dt>Company</dt><dd>' + esc(u.company || '—') + '</dd><dt>Email</dt><dd>' + esc(u.email || '—') + '</dd><dt>Phone</dt><dd>' + esc(u.phone || '—') + '</dd></dl></div>' +
+      (window.Referrals ? Referrals.cardHtml(u) : '') + '</section>';
+    if (window.Referrals) Referrals.wireCard(root);
+  }
+
   window.ClientViews = {
     PAY_METHODS, payFor, sendRequest,
     tabs: [
       { key: 'book', get label() { return REQ() ? 'Request bikes' : 'Book'; }, icon: 'cal', render: renderBook },
-      { key: 'bookings', label: 'My bookings', icon: 'list', render: renderMine }
+      { key: 'bookings', label: 'My bookings', icon: 'list', render: renderMine },
+      { key: 'account', label: 'My account', icon: 'user', render: renderAccount }
     ],
     teardown, resetWiz
   };
